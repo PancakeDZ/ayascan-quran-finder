@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import verses from "./data/quran.json";
+import { surahNames } from "./data/surahNames";
 
 declare global {
   interface Window {
@@ -34,7 +35,9 @@ interface SpeechRecognition {
 }
 
 type Verse = {
-  surah: string;
+  surahNumber: number;
+  surahLatin?: string;
+  surahArabic: string;
   ayah: number;
   arabic: string;
   translation: string;
@@ -136,7 +139,9 @@ export default function Home() {
 
     recognition.start();
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
+    recognition.onresult = (
+      event: SpeechRecognitionEvent
+    ) => {
       const text = event.results[0][0].transcript;
 
       setTranscript(text);
@@ -155,7 +160,8 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6">
-      <div className="max-w-2xl text-center">
+      <div className="max-w-3xl text-center">
+
         <h1 className="text-5xl font-bold mb-4">
           AyaScan Quran Finder
         </h1>
@@ -190,41 +196,55 @@ export default function Home() {
 
         {match && (
           <div className="mt-8 rounded-xl border border-emerald-700 bg-emerald-950 p-6">
+
             <h2 className="text-xl font-bold mb-4">
               ✅ Verset trouvé
             </h2>
 
             <p>
-              <strong>Sourate :</strong> {match.surah}
+              <strong>Sourate :</strong>{" "}
+              {match.surahNumber} -{" "}
+              {surahNames[
+                match.surahNumber as keyof typeof surahNames
+              ]}
             </p>
 
             <p>
-              <strong>Verset :</strong> {match.ayah}
+              <strong>Nom arabe :</strong>{" "}
+              {match.surahArabic}
+            </p>
+
+            <p>
+              <strong>Verset :</strong>{" "}
+              {match.ayah}
             </p>
 
             <p className="mt-2 text-green-300">
               Confiance : {confidence}%
             </p>
 
-            <p className="text-3xl leading-loose mt-4">
+            <p className="text-3xl leading-loose mt-6">
               {match.arabic}
             </p>
 
-            <p className="mt-4 text-slate-300">
-              {match.translation}
-            </p>
+            {match.translation && (
+              <p className="mt-6 text-slate-300">
+                {match.translation}
+              </p>
+            )}
           </div>
         )}
 
         {!match && transcript && (
           <div className="mt-8 text-yellow-400">
-            Aucun verset trouvé dans la base actuelle.
+            Aucun verset trouvé.
           </div>
         )}
 
         <p className="mt-10 text-sm text-slate-500">
-          Sources : Tanzil • Quran.com • EveryAyah
+          Corpus chargé : {verses.length} versets
         </p>
+
       </div>
     </main>
   );
