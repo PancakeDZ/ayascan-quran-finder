@@ -6,32 +6,9 @@ import { surahNames } from "./data/surahNames";
 
 declare global {
   interface Window {
-    webkitSpeechRecognition?: new () => SpeechRecognition;
-    SpeechRecognition?: new () => SpeechRecognition;
+    webkitSpeechRecognition?: unknown;
+    SpeechRecognition?: unknown;
   }
-}
-
-interface SpeechRecognitionResultItem {
-  transcript: string;
-}
-
-interface SpeechRecognitionResult {
-  [index: number]: SpeechRecognitionResultItem;
-}
-
-interface SpeechRecognitionEvent {
-  results: {
-    [index: number]: SpeechRecognitionResult;
-  };
-}
-
-interface SpeechRecognition {
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  start(): void;
-  onresult: ((event: SpeechRecognitionEvent) => void) | null;
-  onerror: (() => void) | null;
 }
 
 type Verse = {
@@ -43,15 +20,20 @@ type Verse = {
   translation: string;
 };
 
+type SearchResult = {
+  verse: Verse;
+  score: number;
+};
+
 export default function Home() {
   const [transcript, setTranscript] = useState("");
   const [status, setStatus] = useState(
     "Cliquez sur le micro pour commencer."
   );
-  const [match, setMatch] = useState<Verse | null>(null);
-  const [confidence, setConfidence] = useState(0);
 
-  const normalizeArabic = (text: string): string => {
+  const [results, setResults] = useState<SearchResult[]>([]);
+
+  const normalizeArabic = (text: string) => {
     return text
       .replace(/[\u064B-\u065F]/g, "")
       .replace(/ـ/g, "")
@@ -67,8 +49,7 @@ export default function Home() {
     const normalizedInput = normalizeArabic(text);
 
     if (!normalizedInput) {
-      setMatch(null);
-      setConfidence(0);
+      setResults([]);
       return;
     }
 
@@ -80,8 +61,7 @@ export default function Home() {
       ),
     ];
 
-    let bestMatch: Verse | null = null;
-    let bestScore = 0;
+    const matches: SearchResult[] = [];
 
     for (const verse of verses as Verse[]) {
       const normalizedVerse = normalizeArabic(
@@ -96,29 +76,63 @@ export default function Home() {
         }
       }
 
-      if (score > bestScore) {
-        bestScore = score;
-        bestMatch = verse;
+      if (score > 0) {
+        matches.push({
+          verse,
+          score: Math.round(
+            (score / uniqueWords.length) * 100
+          ),
+        });
       }
     }
 
-    if (bestMatch) {
-      const percentage = Math.round(
-        (bestScore / uniqueWords.length) * 100
-      );
+    matches.sort(
+      (a, b) => b.score - a.score
+    );
 
-      setMatch(bestMatch);
-      setConfidence(percentage);
-    } else {
-      setMatch(null);
-      setConfidence(0);
-    }
+    setResults(matches.slice(0, 5));
   };
 
   const startListening = () => {
     const SpeechRecognitionConstructor =
-      window.SpeechRecognition ||
-      window.webkitSpeechRecognition;
+      (
+        window as Window & {
+          SpeechRecognition?: new () => {
+            lang: string;
+            continuous: boolean;
+            interimResults: boolean;
+            start(): void;
+            onresult: ((event: {
+              results: { [key: number]: { [key: number]: { transcript: string } } };
+            }) => void) | null;
+            onerror: (() => void) | null;
+          };
+          webkitSpeechRecognition?: new () => {
+            lang: string;
+            continuous: boolean;
+            interimResults: boolean;
+            start(): void;
+            onresult: ((event: {
+              results: { [key: number]: { [key: number]: { transcript: string } } };
+            }) => void) | null;
+            onerror: (() => void) | null;
+          };
+        }
+      ).SpeechRecognition ||
+      (
+        window as Window & {
+          webkitSpeechRecognition?: new () => {
+            lang: string;
+            continuous: boolean;
+            interimResults: boolean;
+            start(): void;
+            onresult: ((event: {
+              results: { [key: number]: { [key: number]: { transcript: string } } };
+            }) => void) | null;
+            onerror: (() => void) | null;
+          };
+        }
+      ).webkitSpeechRecognition;
 
     if (!SpeechRecognitionConstructor) {
       setStatus(
@@ -134,46 +148,46 @@ export default function Home() {
     recognition.interimResults = false;
 
     setStatus("🎤 Écoute en cours...");
-    setMatch(null);
-    setConfidence(0);
+    setResults([]);
 
     recognition.start();
 
-    recognition.onresult = (
-      event: SpeechRecognitionEvent
-    ) => {
-      const text = event.results[0][0].transcript;
+    recognition.onresult = (event) => {
+      const text =
+        event.results[0][0].transcript;
 
       setTranscript(text);
 
       findVerse(text);
 
-      setStatus("✅ Récitation reconnue.");
+      setStatus(
+        "✅ Récitation reconnue."
+      );
     };
 
     recognition.onerror = () => {
       setStatus(
-        "❌ Une erreur est survenue pendant la reconnaissance."
+        "❌ Une erreur est survenue."
       );
     };
   };
 
   return (
     <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6">
-      <div className="max-w-3xl text-center">
+      <div className="max-w-4xl text-center">
 
         <h1 className="text-5xl font-bold mb-4">
           AyaScan Quran Finder
         </h1>
 
         <p className="text-slate-300 mb-8">
-          Retrouvez instantanément une sourate ou un verset
-          à partir d&apos;une récitation vocale.
+          Retrouvez instantanément un verset
+          du Coran à partir d&apos;une récitation.
         </p>
 
         <button
           onClick={startListening}
-          className="bg-emerald-600 hover:bg-emerald-700 transition px-8 py-4 rounded-xl font-semibold"
+          className="bg-emerald-600 hover:bg-emerald-700 px-8 py-4 rounded-xl font-semibold"
         >
           🎤 Commencer
         </button>
@@ -183,7 +197,7 @@ export default function Home() {
         </div>
 
         {transcript && (
-          <div className="mt-8 rounded-xl bg-slate-800 p-6">
+          <div className="mt-8 bg-slate-800 rounded-xl p-6">
             <h2 className="font-bold mb-3">
               Texte reconnu
             </h2>
@@ -194,55 +208,68 @@ export default function Home() {
           </div>
         )}
 
-        {match && (
-          <div className="mt-8 rounded-xl border border-emerald-700 bg-emerald-950 p-6">
+        {results.length > 0 && (
+          <div className="mt-10 space-y-4">
 
-            <h2 className="text-xl font-bold mb-4">
-              ✅ Verset trouvé
+            <h2 className="text-2xl font-bold">
+              Top 5 des résultats
             </h2>
 
-            <p>
-              <strong>Sourate :</strong>{" "}
-              {match.surahNumber} -{" "}
-              {surahNames[
-                match.surahNumber as keyof typeof surahNames
-              ]}
-            </p>
+            {results.map(
+              (result, index) => (
+                <div
+                  key={`${result.verse.surahNumber}-${result.verse.ayah}`}
+                  className="bg-emerald-950 border border-emerald-700 rounded-xl p-6"
+                >
+                  <p className="font-bold">
+                    #{index + 1}
+                  </p>
 
-            <p>
-              <strong>Nom arabe :</strong>{" "}
-              {match.surahArabic}
-            </p>
+                  <p>
+                    <strong>Sourate :</strong>{" "}
+                    {
+                      surahNames[
+                        result.verse
+                          .surahNumber as keyof typeof surahNames
+                      ]
+                    }
+                  </p>
 
-            <p>
-              <strong>Verset :</strong>{" "}
-              {match.ayah}
-            </p>
+                  <p>
+                    <strong>Numéro :</strong>{" "}
+                    {
+                      result.verse
+                        .surahNumber
+                    }
+                  </p>
 
-            <p className="mt-2 text-green-300">
-              Confiance : {confidence}%
-            </p>
+                  <p>
+                    <strong>Verset :</strong>{" "}
+                    {result.verse.ayah}
+                  </p>
 
-            <p className="text-3xl leading-loose mt-6">
-              {match.arabic}
-            </p>
+                  <p className="text-green-300">
+                    Confiance :{" "}
+                    {result.score}%
+                  </p>
 
-            {match.translation && (
-              <p className="mt-6 text-slate-300">
-                {match.translation}
-              </p>
+                  <p className="text-3xl mt-4 leading-loose">
+                    {
+                      result.verse
+                        .arabic
+                    }
+                  </p>
+                </div>
+              )
             )}
           </div>
         )}
 
-        {!match && transcript && (
-          <div className="mt-8 text-yellow-400">
-            Aucun verset trouvé.
-          </div>
-        )}
-
         <p className="mt-10 text-sm text-slate-500">
-          Corpus chargé : {verses.length} versets
+          Corpus chargé : {
+            (verses as Verse[])
+              .length
+          } versets
         </p>
 
       </div>
