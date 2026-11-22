@@ -10,7 +10,9 @@ import BestMatchCard from "./components/BestMatchCard";
 import FavoritesPanel, {
   type FavoriteItem,
 } from "./components/FavoritesPanel";
-
+import HistoryPanel, {
+  type HistoryItem,
+} from "./components/HistoryPanel";
 import verses from "./data/quran.json";
 import { surahNames } from "./data/surahNames";
 
@@ -53,7 +55,7 @@ type RecognitionType = {
 
 // Clé de sauvegarde des favoris dans le navigateur
 const FAVORITES_STORAGE_KEY = "ayascan_favorites";
-
+const HISTORY_STORAGE_KEY = "ayascan_history";
 // Normalisation du texte arabe
 function normalizeArabic(text: string): string {
   return text
@@ -163,10 +165,11 @@ export default function Home() {
   // Gestion des favoris
   const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
   const [favoritesLoaded, setFavoritesLoaded] = useState(false);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+const [historyLoaded, setHistoryLoaded] = useState(false);
 
   const recognitionRef = useRef<RecognitionType | null>(null);
 
-  // Charger les favoris enregistrés dans le navigateur
  
   // Charger les favoris enregistrés dans le navigateur
   useEffect(() => {
@@ -205,7 +208,45 @@ export default function Home() {
       window.cancelAnimationFrame(frameId);
     };
   }, []);
+  // Charger l'historique enregistré dans le navigateur
+  useEffect(() => {
+    let savedHistory: HistoryItem[] = [];
 
+    try {
+      const rawHistory = localStorage.getItem(
+        HISTORY_STORAGE_KEY
+      );
+
+      if (rawHistory) {
+        const parsed: unknown = JSON.parse(rawHistory);
+
+        if (Array.isArray(parsed)) {
+          savedHistory = parsed.filter(
+            (item): item is HistoryItem =>
+              item !== null &&
+              typeof item === "object" &&
+              typeof item.id === "string" &&
+              typeof item.surahName === "string" &&
+              typeof item.surahNumber === "number" &&
+              typeof item.ayah === "number" &&
+              typeof item.arabic === "string" &&
+              typeof item.searchedAt === "number"
+          );
+        }
+      }
+    } catch {
+      console.error("Impossible de charger l'historique.");
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      setHistory(savedHistory);
+      setHistoryLoaded(true);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, []);
 
   // Enregistrer automatiquement les favoris
   useEffect(() => {
@@ -222,7 +263,21 @@ export default function Home() {
       console.error("Impossible d'enregistrer les favoris.");
     }
   }, [favorites, favoritesLoaded]);
+  // Enregistrer automatiquement l'historique
+  useEffect(() => {
+    if (!historyLoaded) {
+      return;
+    }
 
+    try {
+      localStorage.setItem(
+        HISTORY_STORAGE_KEY,
+        JSON.stringify(history)
+      );
+    } catch {
+      console.error("Impossible d'enregistrer l'historique.");
+    }
+  }, [history, historyLoaded]);
   // Ajouter ou retirer un favori
   const toggleFavorite = (result: SearchResult) => {
     const verse = result.verse;
@@ -275,7 +330,17 @@ export default function Home() {
       )
     );
   };
+  // Supprimer une recherche de l'historique
+  const removeHistoryItem = (id: string) => {
+    setHistory((current) =>
+      current.filter((item) => item.id !== id)
+    );
+  };
 
+  // Effacer tout l'historique
+  const clearHistory = () => {
+    setHistory([]);
+  };
   // Recherche intelligente des versets
   const findVerse = (text: string) => {
     const normalizedInput = normalizeArabic(text);
@@ -365,9 +430,34 @@ export default function Home() {
       }
     }
 
-    matches.sort((a, b) => b.score - a.score);
+   matches.sort((a, b) => b.score - a.score);
 
-    setResults(matches.slice(0, 5));
+const rankedResults = matches.slice(0, 5);
+setResults(rankedResults);
+
+// Enregistrer le meilleur résultat dans l'historique
+const bestResult = rankedResults[0];
+
+if (bestResult) {
+  const verse = bestResult.verse;
+  const now = Date.now();
+
+  const historyItem: HistoryItem = {
+    id: `${now}-${verse.surahNumber}-${verse.ayah}`,
+    surahName:
+      surahNames[
+        verse.surahNumber as keyof typeof surahNames
+      ] ?? `Sourate ${verse.surahNumber}`,
+    surahNumber: verse.surahNumber,
+    ayah: verse.ayah,
+    arabic: verse.arabic,
+    searchedAt: now,
+  };
+
+  setHistory((current) =>
+    [historyItem, ...current].slice(0, 50)
+  );
+} 
   };
 
   // Effacer les résultats
@@ -640,7 +730,11 @@ export default function Home() {
           favorites={favorites}
           onRemove={removeFavorite}
         />
-
+<HistoryPanel
+  history={history}
+  onRemove={removeHistoryItem}
+  onClear={clearHistory}
+/>
         <div className="mt-12 text-center text-slate-500 text-sm">
           Corpus chargé : {quranVerses.length} versets
         </div>
