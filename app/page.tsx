@@ -1,11 +1,19 @@
+
+
+
 "use client";
 
-import { useState } from "react";
-import verses from "./data/quran.json";
-import { surahNames } from "./data/surahNames";
+import { useEffect, useRef, useState } from "react";
 
 import BasmalaButton from "./components/BasmalaButton";
 import BestMatchCard from "./components/BestMatchCard";
+import FavoritesPanel, {
+  type FavoriteItem,
+} from "./components/FavoritesPanel";
+
+import verses from "./data/quran.json";
+import { surahNames } from "./data/surahNames";
+
 
 type Verse = {
   surahNumber: number;
@@ -21,6 +29,128 @@ type SearchResult = {
   score: number;
 };
 
+type RecognitionEvent = {
+  results: {
+    length: number;
+    [index: number]: {
+      [index: number]: {
+        transcript: string;
+      };
+    };
+  };
+};
+
+type RecognitionType = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  start(): void;
+  stop(): void;
+  onresult: ((event: RecognitionEvent) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+};
+
+// Clé de sauvegarde des favoris dans le navigateur
+const FAVORITES_STORAGE_KEY = "ayascan_favorites";
+
+// Normalisation du texte arabe
+function normalizeArabic(text: string): string {
+  return text
+    .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, "")
+    .replace(/ـ/g, "")
+    .replace(/[أإآٱ]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/ؤ/g, "و")
+    .replace(/ئ/g, "ي")
+    .replace(/ة/g, "ه")
+    .replace(/[،؛؟!.,:()[\]{}«»"'ـ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Calcul de la distance entre deux mots arabes
+function wordSimilarity(first: string, second: string): number {
+  if (first === second) return 1;
+
+  const a = Array.from(first);
+  const b = Array.from(second);
+
+  if (Math.min(a.length, b.length) < 3) {
+    return 0;
+  }
+
+  const matrix: number[][] = Array.from(
+    { length: a.length + 1 },
+    () => Array(b.length + 1).fill(0)
+  );
+
+  for (let i = 0; i <= a.length; i++) {
+    matrix[i][0] = i;
+  }
+
+  for (let j = 0; j <= b.length; j++) {
+    matrix[0][j] = j;
+  }
+
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      let substitutionCost = a[i - 1] === b[j - 1] ? 0 : 1;
+
+      // Certaines lettres peuvent être confondues
+      // par la reconnaissance vocale
+      if (
+        (a[i - 1] === "ق" && b[j - 1] === "ك") ||
+        (a[i - 1] === "ك" && b[j - 1] === "ق")
+      ) {
+        substitutionCost = 0.45;
+      }
+
+      if (
+        (a[i - 1] === "ت" && b[j - 1] === "ث") ||
+        (a[i - 1] === "ث" && b[j - 1] === "ت")
+      ) {
+        substitutionCost = 0.5;
+      }
+
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + substitutionCost
+      );
+    }
+  }
+
+  const distance = matrix[a.length][b.length];
+
+  return Math.max(
+    0,
+    1 - distance / Math.max(a.length, b.length)
+  );
+}
+
+// Préparation du corpus coranique
+const quranVerses = verses as Verse[];
+
+const normalizedVerseTokens = quranVerses.map((verse) =>
+  normalizeArabic(verse.arabic)
+    .split(" ")
+    .filter(Boolean)
+);
+
+const documentFrequency = new Map<string, number>();
+
+for (const tokens of normalizedVerseTokens) {
+  const uniqueTokens = new Set(tokens);
+
+  for (const token of uniqueTokens) {
+    documentFrequency.set(
+      token,
+      (documentFrequency.get(token) ?? 0) + 1
+    );
+  }
+}
+
 export default function Home() {
   const [transcript, setTranscript] = useState("");
   const [status, setStatus] = useState(
@@ -30,24 +160,123 @@ export default function Home() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [listening, setListening] = useState(false);
 
-  const normalizeArabic = (text: string) => {
-    return text
-      .replace(/[\u064B-\u065F]/g, "")
-      .replace(/ـ/g, "")
-      .replace(/[أإآ]/g, "ا")
-      .replace(/ى/g, "ي")
-      .replace(/ؤ/g, "و")
-      .replace(/ئ/g, "ي")
-      .replace(/\s+/g, " ")
-      .trim();
+  // Gestion des favoris
+  const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
+  const [favoritesLoaded, setFavoritesLoaded] = useState(false);
+
+  const recognitionRef = useRef<RecognitionType | null>(null);
+
+  // Charger les favoris enregistrés dans le navigateur
+ 
+  // Charger les favoris enregistrés dans le navigateur
+  useEffect(() => {
+    let validFavorites: FavoriteItem[] = [];
+
+    try {
+      const savedFavorites = localStorage.getItem(
+        FAVORITES_STORAGE_KEY
+      );
+
+      if (savedFavorites) {
+        const parsedFavorites: unknown = JSON.parse(savedFavorites);
+
+        if (Array.isArray(parsedFavorites)) {
+          validFavorites = parsedFavorites.filter(
+            (item): item is FavoriteItem =>
+              item !== null &&
+              typeof item === "object" &&
+              typeof item.surahName === "string" &&
+              typeof item.surahNumber === "number" &&
+              typeof item.ayah === "number" &&
+              typeof item.arabic === "string"
+          );
+        }
+      }
+    } catch {
+      console.error("Impossible de charger les favoris.");
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      setFavorites(validFavorites);
+      setFavoritesLoaded(true);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, []);
+
+
+  // Enregistrer automatiquement les favoris
+  useEffect(() => {
+    if (!favoritesLoaded) {
+      return;
+    }
+
+    try {
+      localStorage.setItem(
+        FAVORITES_STORAGE_KEY,
+        JSON.stringify(favorites)
+      );
+    } catch {
+      console.error("Impossible d'enregistrer les favoris.");
+    }
+  }, [favorites, favoritesLoaded]);
+
+  // Ajouter ou retirer un favori
+  const toggleFavorite = (result: SearchResult) => {
+    const verse = result.verse;
+
+    const alreadyFavorite = favorites.some(
+      (item) =>
+        item.surahNumber === verse.surahNumber &&
+        item.ayah === verse.ayah
+    );
+
+    if (alreadyFavorite) {
+      setFavorites((current) =>
+        current.filter(
+          (item) =>
+            !(
+              item.surahNumber === verse.surahNumber &&
+              item.ayah === verse.ayah
+            )
+        )
+      );
+
+      return;
+    }
+
+    const newFavorite: FavoriteItem = {
+      surahName:
+        surahNames[
+          verse.surahNumber as keyof typeof surahNames
+        ],
+      surahNumber: verse.surahNumber,
+      ayah: verse.ayah,
+      arabic: verse.arabic,
+    };
+
+    setFavorites((current) => [...current, newFavorite]);
   };
 
-  const clearResults = () => {
-    setTranscript("");
-    setResults([]);
-    setStatus("Touchez ﷽ pour commencer.");
+  // Retirer un favori depuis la liste
+  const removeFavorite = (
+    surahNumber: number,
+    ayah: number
+  ) => {
+    setFavorites((current) =>
+      current.filter(
+        (item) =>
+          !(
+            item.surahNumber === surahNumber &&
+            item.ayah === ayah
+          )
+      )
+    );
   };
 
+  // Recherche intelligente des versets
   const findVerse = (text: string) => {
     const normalizedInput = normalizeArabic(text);
 
@@ -57,103 +286,132 @@ export default function Home() {
     }
 
     const uniqueWords = [
-      ...new Set(
-        normalizedInput
-          .split(" ")
-          .filter(Boolean)
-      ),
+      ...new Set(normalizedInput.split(" ").filter(Boolean)),
     ];
+
+    if (uniqueWords.length === 0) {
+      setResults([]);
+      return;
+    }
 
     const matches: SearchResult[] = [];
 
-    for (const verse of verses as Verse[]) {
-      const normalizedVerse = normalizeArabic(
-        verse.arabic
-      );
+    for (let index = 0; index < quranVerses.length; index++) {
+      const verse = quranVerses[index];
+      const verseTokens = normalizedVerseTokens[index];
 
-      let score = 0;
+      let matchedWeight = 0;
+      let totalWeight = 0;
 
-      for (const word of uniqueWords) {
-        if (normalizedVerse.includes(word)) {
-          score++;
+      const usedVerseWords = new Set<number>();
+
+      for (const inputWord of uniqueWords) {
+        const frequency =
+          documentFrequency.get(inputWord) ?? 0;
+
+        // Les mots rares sont plus importants
+        const weight =
+          1 + Math.log(
+            (quranVerses.length + 1) / (frequency + 1)
+          );
+
+        totalWeight += weight;
+
+        let bestSimilarity = 0;
+        let bestIndex = -1;
+
+        for (
+          let wordIndex = 0;
+          wordIndex < verseTokens.length;
+          wordIndex++
+        ) {
+          if (usedVerseWords.has(wordIndex)) {
+            continue;
+          }
+
+          const similarity = wordSimilarity(
+            inputWord,
+            verseTokens[wordIndex]
+          );
+
+          if (similarity > bestSimilarity) {
+            bestSimilarity = similarity;
+            bestIndex = wordIndex;
+          }
+        }
+
+        // Seuil de tolérance pour les erreurs vocales
+        const threshold =
+          inputWord.length >= 4 ? 0.60 : 0.70;
+
+        if (
+          bestIndex !== -1 &&
+          bestSimilarity >= threshold
+        ) {
+          matchedWeight += weight * bestSimilarity;
+          usedVerseWords.add(bestIndex);
         }
       }
 
-      if (score > 0) {
+      if (matchedWeight > 0 && totalWeight > 0) {
+        const score = Math.round(
+          (matchedWeight / totalWeight) * 100
+        );
+
         matches.push({
           verse,
-          score: Math.round(
-            (score / uniqueWords.length) * 100
-          ),
+          score,
         });
       }
     }
 
-    matches.sort(
-      (a, b) => b.score - a.score
-    );
+    matches.sort((a, b) => b.score - a.score);
 
     setResults(matches.slice(0, 5));
   };
 
+  // Effacer les résultats
+  const clearResults = () => {
+    if (recognitionRef.current) {
+      const recognition = recognitionRef.current;
+      recognitionRef.current = null;
+
+      recognition.stop();
+    }
+
+    setListening(false);
+    setTranscript("");
+    setResults([]);
+    setStatus("Touchez ﷽ pour commencer.");
+  };
+
+  // Arrêter la reconnaissance vocale
+  const stopListening = () => {
+    const recognition = recognitionRef.current;
+
+    if (recognition) {
+      recognitionRef.current = null;
+      recognition.stop();
+    }
+
+    setListening(false);
+    setStatus("⏹️ Récitation arrêtée.");
+  };
+
+  // Démarrer la reconnaissance vocale
   const startListening = () => {
+    if (recognitionRef.current) {
+      return;
+    }
+
+    const speechWindow = window as Window & {
+      SpeechRecognition?: new () => RecognitionType;
+      webkitSpeechRecognition?: new () => RecognitionType;
+    };
+
     const SpeechRecognitionConstructor =
-      (
-        window as Window & {
-          SpeechRecognition?: new () => {
-            lang: string;
-            continuous: boolean;
-            interimResults: boolean;
-            start(): void;
-            onresult: ((event: {
-              results: {
-                [key: number]: {
-                  [key: number]: {
-                    transcript: string;
-                  };
-                };
-              };
-            }) => void) | null;
-            onerror: (() => void) | null;
-          };
-          webkitSpeechRecognition?: new () => {
-            lang: string;
-            continuous: boolean;
-            interimResults: boolean;
-            start(): void;
-            onresult: ((event: {
-              results: {
-                [key: number]: {
-                  [key: number]: {
-                    transcript: string;
-                  };
-                };
-              };
-            }) => void) | null;
-            onerror: (() => void) | null;
-          };
-        }
-      ).SpeechRecognition ||
-      (
-        window as Window & {
-          webkitSpeechRecognition?: new () => {
-            lang: string;
-            continuous: boolean;
-            interimResults: boolean;
-            start(): void;
-            onresult: ((event: {
-              results: {
-                [key: number]: {
-                  [key: number]: {
-                    transcript: string;
-                  };
-                };
-              };
-            }) => void) | null;
-            onerror: (() => void) | null;
-          };
-        }
-      ).webkitSpeechRecognition;
+      speechWindow.SpeechRecognition ||
+      speechWindow.webkitSpeechRecognition;
 
     if (!SpeechRecognitionConstructor) {
       setStatus(
@@ -162,44 +420,76 @@ export default function Home() {
       return;
     }
 
-    const recognition =
-      new SpeechRecognitionConstructor();
+    const recognition = new SpeechRecognitionConstructor();
+
+    recognitionRef.current = recognition;
 
     recognition.lang = "ar-SA";
-    recognition.continuous = false;
+    recognition.continuous = true;
     recognition.interimResults = false;
 
-    setListening(true);
-    setStatus("🔊 Écoute en cours...");
-    setResults([]);
-
-    recognition.start();
-
     recognition.onresult = (event) => {
-      const text =
-        event.results[0][0].transcript;
+      if (recognitionRef.current !== recognition) {
+        return;
+      }
 
-      setTranscript(text);
+      const recognizedText = Array.from(
+        { length: event.results.length },
+        (_, index) => event.results[index][0].transcript
+      )
+        .join(" ")
+        .trim();
 
-      findVerse(text);
+      setTranscript(recognizedText);
 
-      setListening(false);
+      findVerse(recognizedText);
 
       setStatus(
-        "✅ Récitation reconnue."
+        "🎙️ Récitation reconnue. Écoute en cours..."
       );
     };
 
     recognition.onerror = () => {
-      setListening(false);
-
-      setStatus(
-        "❌ Une erreur est survenue."
-      );
+      if (recognitionRef.current === recognition) {
+        recognitionRef.current = null;
+        setListening(false);
+        setStatus("❌ Une erreur est survenue.");
+      }
     };
+
+    recognition.onend = () => {
+      if (recognitionRef.current === recognition) {
+        recognitionRef.current = null;
+        setListening(false);
+        setStatus("⏹️ Écoute terminée.");
+      }
+    };
+
+    setListening(true);
+    setStatus("🔊 Écoute en cours...");
+    setResults([]);
+    setTranscript("");
+
+    try {
+      recognition.start();
+    } catch {
+      recognitionRef.current = null;
+      setListening(false);
+      setStatus(
+        "❌ Impossible de démarrer le microphone."
+      );
+    }
   };
 
   const bestMatch = results[0];
+
+  const bestMatchIsFavorite = bestMatch
+    ? favorites.some(
+        (item) =>
+          item.surahNumber === bestMatch.verse.surahNumber &&
+          item.ayah === bestMatch.verse.ayah
+      )
+    : false;
 
   return (
     <main className="min-h-screen bg-linear-to-br from-slate-950 via-emerald-950 to-slate-900 text-white">
@@ -238,9 +528,18 @@ export default function Home() {
 
           <div className="mt-4 flex justify-center gap-4">
 
+            {listening && (
+              <button
+                onClick={stopListening}
+                className="px-5 py-2 rounded-xl bg-red-700 hover:bg-red-600 transition-colors"
+              >
+                ■ Arrêter
+              </button>
+            )}
+
             <button
               onClick={clearResults}
-              className="px-5 py-2 rounded-xl bg-red-700 hover:bg-red-600"
+              className="px-5 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 transition-colors"
             >
               ✧ Effacer
             </button>
@@ -282,6 +581,8 @@ export default function Home() {
               ayah={bestMatch.verse.ayah}
               arabic={bestMatch.verse.arabic}
               confidence={bestMatch.score}
+              isFavorite={bestMatchIsFavorite}
+              onToggleFavorite={() => toggleFavorite(bestMatch)}
             />
 
           </div>
@@ -335,8 +636,13 @@ export default function Home() {
 
         )}
 
+        <FavoritesPanel
+          favorites={favorites}
+          onRemove={removeFavorite}
+        />
+
         <div className="mt-12 text-center text-slate-500 text-sm">
-          Corpus chargé : {(verses as Verse[]).length} versets
+          Corpus chargé : {quranVerses.length} versets
         </div>
 
       </div>

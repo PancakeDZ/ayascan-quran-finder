@@ -1,3 +1,4 @@
+
 type Props = {
   surahName: string;
   surahArabic: string;
@@ -5,6 +6,8 @@ type Props = {
   ayah: number;
   arabic: string;
   confidence: number;
+  isFavorite: boolean;
+  onToggleFavorite: () => void;
 };
 
 export default function BestMatchCard({
@@ -14,6 +17,8 @@ export default function BestMatchCard({
   ayah,
   arabic,
   confidence,
+  isFavorite,
+  onToggleFavorite,
 }: Props) {
   const copyVerse = async () => {
     const text = `
@@ -24,8 +29,12 @@ ${arabic}
 AyaScan Quran Finder
 `;
 
-    await navigator.clipboard.writeText(text);
-    alert("Verset copié ✅");
+    try {
+      await navigator.clipboard.writeText(text);
+      alert("Verset copié !");
+    } catch {
+      alert("Impossible de copier le verset.");
+    }
   };
 
   return (
@@ -57,16 +66,23 @@ AyaScan Quran Finder
       <div className="mt-8 flex flex-wrap gap-4 justify-center">
 
         <button
+          type="button"
           onClick={copyVerse}
-          className="rounded-xl bg-emerald-700 px-4 py-2 hover:bg-emerald-600"
+          className="rounded-xl bg-emerald-700 px-4 py-2 hover:bg-emerald-600 transition-colors"
         >
-          ❖ Copier
+          ▣ Copier
         </button>
 
         <button
-          className="rounded-xl bg-amber-700 px-4 py-2 hover:bg-amber-600"
+          type="button"
+          onClick={onToggleFavorite}
+          className={`rounded-xl px-4 py-2 transition-colors ${
+            isFavorite
+              ? "bg-amber-600 hover:bg-amber-500"
+              : "bg-slate-700 hover:bg-slate-600"
+          }`}
         >
-          ۞ Favori
+          {isFavorite ? "★ Retirer des favoris" : "☆ Ajouter aux favoris"}
         </button>
 
       </div>

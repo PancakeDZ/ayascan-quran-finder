@@ -1,0 +1,513 @@
+
+"use client";
+
+import { useRef, useState } from "react";
+import verses from "./data/quran.json";
+import { surahNames } from "./data/surahNames";
+
+import BasmalaButton from "./components/BasmalaButton";
+import BestMatchCard from "./components/BestMatchCard";
+
+type Verse = {
+  surahNumber: number;
+  surahLatin?: string;
+  surahArabic: string;
+  ayah: number;
+  arabic: string;
+  translation: string;
+};
+
+type SearchResult = {
+  verse: Verse;
+  score: number;
+};
+
+type RecognitionEvent = {
+  results: {
+    length: number;
+    [index: number]: {
+      [index: number]: {
+        transcript: string;
+      };
+    };
+  };
+};
+
+type RecognitionType = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  start(): void;
+  stop(): void;
+  onresult: ((event: RecognitionEvent) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+};
+
+// Normalisation du texte arabe
+function normalizeArabic(text: string): string {
+  return text
+    .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, "")
+    .replace(/ـ/g, "")
+    .replace(/[أإآٱ]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/ؤ/g, "و")
+    .replace(/ئ/g, "ي")
+    .replace(/ة/g, "ه")
+    .replace(/[،؛؟!.,:()[\]{}«»"'ـ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Calcul de la distance entre deux mots arabes
+function wordSimilarity(first: string, second: string): number {
+  if (first === second) return 1;
+
+  const a = Array.from(first);
+  const b = Array.from(second);
+
+  if (Math.min(a.length, b.length) < 3) {
+    return 0;
+  }
+
+  const matrix: number[][] = Array.from(
+    { length: a.length + 1 },
+    () => Array(b.length + 1).fill(0)
+  );
+
+  for (let i = 0; i <= a.length; i++) {
+    matrix[i][0] = i;
+  }
+
+  for (let j = 0; j <= b.length; j++) {
+    matrix[0][j] = j;
+  }
+
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      let substitutionCost = a[i - 1] === b[j - 1] ? 0 : 1;
+
+      // Certaines lettres peuvent être confondues
+      // par la reconnaissance vocale
+      if (
+        (a[i - 1] === "ق" && b[j - 1] === "ك") ||
+        (a[i - 1] === "ك" && b[j - 1] === "ق")
+      ) {
+        substitutionCost = 0.45;
+      }
+
+      if (
+        (a[i - 1] === "ت" && b[j - 1] === "ث") ||
+        (a[i - 1] === "ث" && b[j - 1] === "ت")
+      ) {
+        substitutionCost = 0.5;
+      }
+
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + substitutionCost
+      );
+    }
+  }
+
+  const distance = matrix[a.length][b.length];
+
+  return Math.max(
+    0,
+    1 - distance / Math.max(a.length, b.length)
+  );
+}
+
+// Préparation du corpus coranique
+const quranVerses = verses as Verse[];
+
+const normalizedVerseTokens = quranVerses.map((verse) =>
+  normalizeArabic(verse.arabic)
+    .split(" ")
+    .filter(Boolean)
+);
+
+const documentFrequency = new Map<string, number>();
+
+for (const tokens of normalizedVerseTokens) {
+  const uniqueTokens = new Set(tokens);
+
+  for (const token of uniqueTokens) {
+    documentFrequency.set(
+      token,
+      (documentFrequency.get(token) ?? 0) + 1
+    );
+  }
+}
+
+export default function Home() {
+  const [transcript, setTranscript] = useState("");
+  const [status, setStatus] = useState(
+    "Touchez ﷽ pour commencer."
+  );
+
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [listening, setListening] = useState(false);
+
+  const recognitionRef = useRef<RecognitionType | null>(null);
+
+  // Recherche intelligente des versets
+  const findVerse = (text: string) => {
+    const normalizedInput = normalizeArabic(text);
+
+    if (!normalizedInput) {
+      setResults([]);
+      return;
+    }
+
+    const uniqueWords = [
+      ...new Set(normalizedInput.split(" ").filter(Boolean)),
+    ];
+
+    if (uniqueWords.length === 0) {
+      setResults([]);
+      return;
+    }
+
+    const matches: SearchResult[] = [];
+
+    for (let index = 0; index < quranVerses.length; index++) {
+      const verse = quranVerses[index];
+      const verseTokens = normalizedVerseTokens[index];
+
+      let matchedWeight = 0;
+      let totalWeight = 0;
+
+      const usedVerseWords = new Set<number>();
+
+      for (const inputWord of uniqueWords) {
+        const frequency =
+          documentFrequency.get(inputWord) ?? 0;
+
+        // Les mots rares sont plus importants
+        const weight =
+          1 + Math.log(
+            (quranVerses.length + 1) / (frequency + 1)
+          );
+
+        totalWeight += weight;
+
+        let bestSimilarity = 0;
+        let bestIndex = -1;
+
+        for (
+          let wordIndex = 0;
+          wordIndex < verseTokens.length;
+          wordIndex++
+        ) {
+          if (usedVerseWords.has(wordIndex)) {
+            continue;
+          }
+
+          const similarity = wordSimilarity(
+            inputWord,
+            verseTokens[wordIndex]
+          );
+
+          if (similarity > bestSimilarity) {
+            bestSimilarity = similarity;
+            bestIndex = wordIndex;
+          }
+        }
+
+        // Seuil de tolérance pour les erreurs vocales
+        const threshold =
+          inputWord.length >= 4 ? 0.60 : 0.70;
+
+        if (
+          bestIndex !== -1 &&
+          bestSimilarity >= threshold
+        ) {
+          matchedWeight += weight * bestSimilarity;
+          usedVerseWords.add(bestIndex);
+        }
+      }
+
+      if (matchedWeight > 0 && totalWeight > 0) {
+        const score = Math.round(
+          (matchedWeight / totalWeight) * 100
+        );
+
+        matches.push({
+          verse,
+          score,
+        });
+      }
+    }
+
+    matches.sort((a, b) => b.score - a.score);
+
+    setResults(matches.slice(0, 5));
+  };
+
+  // Effacer les résultats
+  const clearResults = () => {
+    if (recognitionRef.current) {
+      const recognition = recognitionRef.current;
+      recognitionRef.current = null;
+
+      recognition.stop();
+    }
+
+    setListening(false);
+    setTranscript("");
+    setResults([]);
+    setStatus("Touchez ﷽ pour commencer.");
+  };
+
+  // Arrêter la reconnaissance vocale
+  const stopListening = () => {
+    const recognition = recognitionRef.current;
+
+    if (recognition) {
+      recognitionRef.current = null;
+      recognition.stop();
+    }
+
+    setListening(false);
+    setStatus("⏹️ Récitation arrêtée.");
+  };
+
+  // Démarrer la reconnaissance vocale
+  const startListening = () => {
+    if (recognitionRef.current) {
+      return;
+    }
+
+    const speechWindow = window as Window & {
+      SpeechRecognition?: new () => RecognitionType;
+      webkitSpeechRecognition?: new () => RecognitionType;
+    };
+
+    const SpeechRecognitionConstructor =
+      speechWindow.SpeechRecognition ||
+      speechWindow.webkitSpeechRecognition;
+
+    if (!SpeechRecognitionConstructor) {
+      setStatus(
+        "❌ Reconnaissance vocale non supportée."
+      );
+      return;
+    }
+
+    const recognition = new SpeechRecognitionConstructor();
+
+    recognitionRef.current = recognition;
+
+    recognition.lang = "ar-SA";
+    recognition.continuous = true;
+    recognition.interimResults = false;
+
+    recognition.onresult = (event) => {
+      if (recognitionRef.current !== recognition) {
+        return;
+      }
+
+      const recognizedText = Array.from(
+        { length: event.results.length },
+        (_, index) => event.results[index][0].transcript
+      )
+        .join(" ")
+        .trim();
+
+      setTranscript(recognizedText);
+
+      findVerse(recognizedText);
+
+      setStatus(
+        "🎙️ Récitation reconnue. Écoute en cours..."
+      );
+    };
+
+    recognition.onerror = () => {
+      if (recognitionRef.current === recognition) {
+        recognitionRef.current = null;
+        setListening(false);
+        setStatus("❌ Une erreur est survenue.");
+      }
+    };
+
+    recognition.onend = () => {
+      if (recognitionRef.current === recognition) {
+        recognitionRef.current = null;
+        setListening(false);
+        setStatus("⏹️ Écoute terminée.");
+      }
+    };
+
+    setListening(true);
+    setStatus("🔊 Écoute en cours...");
+    setResults([]);
+    setTranscript("");
+
+    try {
+      recognition.start();
+    } catch {
+      recognitionRef.current = null;
+      setListening(false);
+      setStatus(
+        "❌ Impossible de démarrer le microphone."
+      );
+    }
+  };
+
+  const bestMatch = results[0];
+
+  return (
+    <main className="min-h-screen bg-linear-to-br from-slate-950 via-emerald-950 to-slate-900 text-white">
+
+      <div className="max-w-6xl mx-auto px-6 py-12">
+
+        <div className="text-center">
+
+          <h1 className="text-6xl text-amber-300 mb-4">
+            ﷽
+          </h1>
+
+          <h2 className="text-5xl font-bold">
+            AyaScan
+          </h2>
+
+          <p className="mt-2 text-slate-300">
+            Quran Finder
+          </p>
+
+          <p className="mt-6 text-slate-400">
+            Retrouvez instantanément une
+            sourate à partir d&apos;une récitation.
+          </p>
+
+          <div className="mt-10 flex justify-center">
+            <BasmalaButton
+              onClick={startListening}
+              listening={listening}
+            />
+          </div>
+
+          <div className="mt-6 text-emerald-300">
+            {status}
+          </div>
+
+          <div className="mt-4 flex justify-center gap-4">
+
+            {listening && (
+              <button
+                onClick={stopListening}
+                className="px-5 py-2 rounded-xl bg-red-700 hover:bg-red-600 transition-colors"
+              >
+                ■ Arrêter
+              </button>
+            )}
+
+            <button
+              onClick={clearResults}
+              className="px-5 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 transition-colors"
+            >
+              ✧ Effacer
+            </button>
+
+          </div>
+
+        </div>
+
+        {transcript && (
+          <div className="mt-12 bg-slate-900/50 rounded-3xl p-6 text-center">
+
+            <h3 className="font-bold mb-3">
+              Texte reconnu
+            </h3>
+
+            <p className="text-2xl">
+              {transcript}
+            </p>
+
+          </div>
+        )}
+
+        {bestMatch && (
+          <div className="mt-12">
+
+            <BestMatchCard
+              surahName={
+                surahNames[
+                  bestMatch.verse
+                    .surahNumber as keyof typeof surahNames
+                ]
+              }
+              surahArabic={
+                bestMatch.verse.surahArabic
+              }
+              surahNumber={
+                bestMatch.verse.surahNumber
+              }
+              ayah={bestMatch.verse.ayah}
+              arabic={bestMatch.verse.arabic}
+              confidence={bestMatch.score}
+            />
+
+          </div>
+        )}
+
+        {results.length > 1 && (
+
+          <div className="mt-10">
+
+            <h2 className="text-2xl font-bold mb-6">
+              Autres résultats possibles
+            </h2>
+
+            <div className="grid gap-4">
+
+              {results
+                .slice(1)
+                .map((result, index) => (
+
+                  <div
+                    key={`${result.verse.surahNumber}-${result.verse.ayah}`}
+                    className="bg-slate-900/50 rounded-2xl p-5"
+                  >
+                    <p>
+                      #{index + 2}
+                    </p>
+
+                    <p>
+                      {
+                        surahNames[
+                          result.verse
+                            .surahNumber as keyof typeof surahNames
+                        ]
+                      }
+                    </p>
+
+                    <p>
+                      Verset {result.verse.ayah}
+                    </p>
+
+                    <p className="text-emerald-300">
+                      {result.score}%
+                    </p>
+                  </div>
+
+                ))}
+
+            </div>
+
+          </div>
+
+        )}
+
+        <div className="mt-12 text-center text-slate-500 text-sm">
+          Corpus chargé : {quranVerses.length} versets
+        </div>
+
+      </div>
+
+    </main>
+  );
+}
