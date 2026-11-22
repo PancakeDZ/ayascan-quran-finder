@@ -4,12 +4,8 @@ import { useState } from "react";
 import verses from "./data/quran.json";
 import { surahNames } from "./data/surahNames";
 
-declare global {
-  interface Window {
-    webkitSpeechRecognition?: unknown;
-    SpeechRecognition?: unknown;
-  }
-}
+import BasmalaButton from "./components/BasmalaButton";
+import BestMatchCard from "./components/BestMatchCard";
 
 type Verse = {
   surahNumber: number;
@@ -28,10 +24,11 @@ type SearchResult = {
 export default function Home() {
   const [transcript, setTranscript] = useState("");
   const [status, setStatus] = useState(
-    "Cliquez sur le micro pour commencer."
+    "Touchez ﷽ pour commencer."
   );
 
   const [results, setResults] = useState<SearchResult[]>([]);
+  const [listening, setListening] = useState(false);
 
   const normalizeArabic = (text: string) => {
     return text
@@ -43,6 +40,12 @@ export default function Home() {
       .replace(/ئ/g, "ي")
       .replace(/\s+/g, " ")
       .trim();
+  };
+
+  const clearResults = () => {
+    setTranscript("");
+    setResults([]);
+    setStatus("Touchez ﷽ pour commencer.");
   };
 
   const findVerse = (text: string) => {
@@ -103,7 +106,13 @@ export default function Home() {
             interimResults: boolean;
             start(): void;
             onresult: ((event: {
-              results: { [key: number]: { [key: number]: { transcript: string } } };
+              results: {
+                [key: number]: {
+                  [key: number]: {
+                    transcript: string;
+                  };
+                };
+              };
             }) => void) | null;
             onerror: (() => void) | null;
           };
@@ -113,7 +122,13 @@ export default function Home() {
             interimResults: boolean;
             start(): void;
             onresult: ((event: {
-              results: { [key: number]: { [key: number]: { transcript: string } } };
+              results: {
+                [key: number]: {
+                  [key: number]: {
+                    transcript: string;
+                  };
+                };
+              };
             }) => void) | null;
             onerror: (() => void) | null;
           };
@@ -127,7 +142,13 @@ export default function Home() {
             interimResults: boolean;
             start(): void;
             onresult: ((event: {
-              results: { [key: number]: { [key: number]: { transcript: string } } };
+              results: {
+                [key: number]: {
+                  [key: number]: {
+                    transcript: string;
+                  };
+                };
+              };
             }) => void) | null;
             onerror: (() => void) | null;
           };
@@ -136,18 +157,20 @@ export default function Home() {
 
     if (!SpeechRecognitionConstructor) {
       setStatus(
-        "❌ Votre navigateur ne supporte pas la reconnaissance vocale."
+        "❌ Reconnaissance vocale non supportée."
       );
       return;
     }
 
-    const recognition = new SpeechRecognitionConstructor();
+    const recognition =
+      new SpeechRecognitionConstructor();
 
     recognition.lang = "ar-SA";
     recognition.continuous = false;
     recognition.interimResults = false;
 
-    setStatus("🎤 Écoute en cours...");
+    setListening(true);
+    setStatus("🔊 Écoute en cours...");
     setResults([]);
 
     recognition.start();
@@ -160,119 +183,164 @@ export default function Home() {
 
       findVerse(text);
 
+      setListening(false);
+
       setStatus(
         "✅ Récitation reconnue."
       );
     };
 
     recognition.onerror = () => {
+      setListening(false);
+
       setStatus(
         "❌ Une erreur est survenue."
       );
     };
   };
 
+  const bestMatch = results[0];
+
   return (
-    <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6">
-      <div className="max-w-4xl text-center">
+    <main className="min-h-screen bg-linear-to-br from-slate-950 via-emerald-950 to-slate-900 text-white">
 
-        <h1 className="text-5xl font-bold mb-4">
-          AyaScan Quran Finder
-        </h1>
+      <div className="max-w-6xl mx-auto px-6 py-12">
 
-        <p className="text-slate-300 mb-8">
-          Retrouvez instantanément un verset
-          du Coran à partir d&apos;une récitation.
-        </p>
+        <div className="text-center">
 
-        <button
-          onClick={startListening}
-          className="bg-emerald-600 hover:bg-emerald-700 px-8 py-4 rounded-xl font-semibold"
-        >
-          🎤 Commencer
-        </button>
+          <h1 className="text-6xl text-amber-300 mb-4">
+            ﷽
+          </h1>
 
-        <div className="mt-6 text-emerald-400">
-          {status}
+          <h2 className="text-5xl font-bold">
+            AyaScan
+          </h2>
+
+          <p className="mt-2 text-slate-300">
+            Quran Finder
+          </p>
+
+          <p className="mt-6 text-slate-400">
+            Retrouvez instantanément une
+            sourate à partir d&apos;une récitation.
+          </p>
+
+          <div className="mt-10 flex justify-center">
+            <BasmalaButton
+              onClick={startListening}
+              listening={listening}
+            />
+          </div>
+
+          <div className="mt-6 text-emerald-300">
+            {status}
+          </div>
+
+          <div className="mt-4 flex justify-center gap-4">
+
+            <button
+              onClick={clearResults}
+              className="px-5 py-2 rounded-xl bg-red-700 hover:bg-red-600"
+            >
+              ✧ Effacer
+            </button>
+
+          </div>
+
         </div>
 
         {transcript && (
-          <div className="mt-8 bg-slate-800 rounded-xl p-6">
-            <h2 className="font-bold mb-3">
+          <div className="mt-12 bg-slate-900/50 rounded-3xl p-6 text-center">
+
+            <h3 className="font-bold mb-3">
               Texte reconnu
-            </h2>
+            </h3>
 
             <p className="text-2xl">
               {transcript}
             </p>
+
           </div>
         )}
 
-        {results.length > 0 && (
-          <div className="mt-10 space-y-4">
+        {bestMatch && (
+          <div className="mt-12">
 
-            <h2 className="text-2xl font-bold">
-              Top 5 des résultats
+            <BestMatchCard
+              surahName={
+                surahNames[
+                  bestMatch.verse
+                    .surahNumber as keyof typeof surahNames
+                ]
+              }
+              surahArabic={
+                bestMatch.verse.surahArabic
+              }
+              surahNumber={
+                bestMatch.verse.surahNumber
+              }
+              ayah={bestMatch.verse.ayah}
+              arabic={bestMatch.verse.arabic}
+              confidence={bestMatch.score}
+            />
+
+          </div>
+        )}
+
+        {results.length > 1 && (
+
+          <div className="mt-10">
+
+            <h2 className="text-2xl font-bold mb-6">
+              Autres résultats possibles
             </h2>
 
-            {results.map(
-              (result, index) => (
-                <div
-                  key={`${result.verse.surahNumber}-${result.verse.ayah}`}
-                  className="bg-emerald-950 border border-emerald-700 rounded-xl p-6"
-                >
-                  <p className="font-bold">
-                    #{index + 1}
-                  </p>
+            <div className="grid gap-4">
 
-                  <p>
-                    <strong>Sourate :</strong>{" "}
-                    {
-                      surahNames[
-                        result.verse
-                          .surahNumber as keyof typeof surahNames
-                      ]
-                    }
-                  </p>
+              {results
+                .slice(1)
+                .map((result, index) => (
 
-                  <p>
-                    <strong>Numéro :</strong>{" "}
-                    {
-                      result.verse
-                        .surahNumber
-                    }
-                  </p>
+                  <div
+                    key={`${result.verse.surahNumber}-${result.verse.ayah}`}
+                    className="bg-slate-900/50 rounded-2xl p-5"
+                  >
+                    <p>
+                      #{index + 2}
+                    </p>
 
-                  <p>
-                    <strong>Verset :</strong>{" "}
-                    {result.verse.ayah}
-                  </p>
+                    <p>
+                      {
+                        surahNames[
+                          result.verse
+                            .surahNumber as keyof typeof surahNames
+                        ]
+                      }
+                    </p>
 
-                  <p className="text-green-300">
-                    Confiance :{" "}
-                    {result.score}%
-                  </p>
+                    <p>
+                      Verset {result.verse.ayah}
+                    </p>
 
-                  <p className="text-3xl mt-4 leading-loose">
-                    {
-                      result.verse
-                        .arabic
-                    }
-                  </p>
-                </div>
-              )
-            )}
+                    <p className="text-emerald-300">
+                      {result.score}%
+                    </p>
+                  </div>
+
+                ))}
+
+            </div>
+
           </div>
+
         )}
 
-        <p className="mt-10 text-sm text-slate-500">
-          Corpus chargé : {
-            (verses as Verse[])
-              .length
-          } versets
-        </p>
+        <div className="mt-12 text-center text-slate-500 text-sm">
+          Corpus chargé : {(verses as Verse[]).length} versets
+        </div>
 
       </div>
+
     </main>
   );
 }
