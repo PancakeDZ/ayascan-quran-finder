@@ -169,7 +169,7 @@ export default function Home() {
 const [historyLoaded, setHistoryLoaded] = useState(false);
 
   const recognitionRef = useRef<RecognitionType | null>(null);
-
+const latestBestResultRef = useRef<SearchResult | null>(null);
  
   // Charger les favoris enregistrés dans le navigateur
   useEffect(() => {
@@ -341,6 +341,36 @@ const [historyLoaded, setHistoryLoaded] = useState(false);
   const clearHistory = () => {
     setHistory([]);
   };
+ 
+  // Enregistrer le meilleur résultat une seule fois à la fin de l'écoute
+const saveBestResultToHistory = () => {
+  const bestResult = latestBestResultRef.current;
+
+  if (!bestResult) {
+    return;
+  }
+
+  const verse = bestResult.verse;
+  const now = Date.now();
+
+  const historyItem: HistoryItem = {
+    id: `${now}-${verse.surahNumber}-${verse.ayah}`,
+    surahName:
+      surahNames[
+        verse.surahNumber as keyof typeof surahNames
+      ] ?? `Sourate ${verse.surahNumber}`,
+    surahNumber: verse.surahNumber,
+    ayah: verse.ayah,
+    arabic: verse.arabic,
+    searchedAt: now,
+  };
+
+  setHistory((current) =>
+    [historyItem, ...current].slice(0, 50)
+  );
+
+  latestBestResultRef.current = null;
+};
   // Recherche intelligente des versets
   const findVerse = (text: string) => {
     const normalizedInput = normalizeArabic(text);
@@ -430,34 +460,15 @@ const [historyLoaded, setHistoryLoaded] = useState(false);
       }
     }
 
-   matches.sort((a, b) => b.score - a.score);
+      matches.sort((a, b) => b.score - a.score);
 
-const rankedResults = matches.slice(0, 5);
-setResults(rankedResults);
+    const rankedResults = matches.slice(0, 5);
 
-// Enregistrer le meilleur résultat dans l'historique
-const bestResult = rankedResults[0];
+    setResults(rankedResults);
 
-if (bestResult) {
-  const verse = bestResult.verse;
-  const now = Date.now();
-
-  const historyItem: HistoryItem = {
-    id: `${now}-${verse.surahNumber}-${verse.ayah}`,
-    surahName:
-      surahNames[
-        verse.surahNumber as keyof typeof surahNames
-      ] ?? `Sourate ${verse.surahNumber}`,
-    surahNumber: verse.surahNumber,
-    ayah: verse.ayah,
-    arabic: verse.arabic,
-    searchedAt: now,
-  };
-
-  setHistory((current) =>
-    [historyItem, ...current].slice(0, 50)
-  );
-} 
+    // Conserver uniquement le meilleur résultat
+    // pour l'enregistrer à la fin de l'écoute
+    latestBestResultRef.current = rankedResults[0] ?? null;
   };
 
   // Effacer les résultats
@@ -469,6 +480,7 @@ if (bestResult) {
       recognition.stop();
     }
 
+       latestBestResultRef.current = null;
     setListening(false);
     setTranscript("");
     setResults([]);
@@ -478,6 +490,8 @@ if (bestResult) {
   // Arrêter la reconnaissance vocale
   const stopListening = () => {
     const recognition = recognitionRef.current;
+
+    saveBestResultToHistory();
 
     if (recognition) {
       recognitionRef.current = null;
@@ -504,9 +518,7 @@ if (bestResult) {
       speechWindow.webkitSpeechRecognition;
 
     if (!SpeechRecognitionConstructor) {
-      setStatus(
-        "❌ Reconnaissance vocale non supportée."
-      );
+      setStatus("❌ Reconnaissance vocale non supportée.");
       return;
     }
 
@@ -517,6 +529,8 @@ if (bestResult) {
     recognition.lang = "ar-SA";
     recognition.continuous = true;
     recognition.interimResults = false;
+
+    latestBestResultRef.current = null;
 
     recognition.onresult = (event) => {
       if (recognitionRef.current !== recognition) {
@@ -531,7 +545,6 @@ if (bestResult) {
         .trim();
 
       setTranscript(recognizedText);
-
       findVerse(recognizedText);
 
       setStatus(
@@ -542,6 +555,7 @@ if (bestResult) {
     recognition.onerror = () => {
       if (recognitionRef.current === recognition) {
         recognitionRef.current = null;
+        latestBestResultRef.current = null;
         setListening(false);
         setStatus("❌ Une erreur est survenue.");
       }
@@ -549,6 +563,8 @@ if (bestResult) {
 
     recognition.onend = () => {
       if (recognitionRef.current === recognition) {
+        saveBestResultToHistory();
+
         recognitionRef.current = null;
         setListening(false);
         setStatus("⏹️ Écoute terminée.");
@@ -564,14 +580,12 @@ if (bestResult) {
       recognition.start();
     } catch {
       recognitionRef.current = null;
+      latestBestResultRef.current = null;
       setListening(false);
-      setStatus(
-        "❌ Impossible de démarrer le microphone."
-      );
+      setStatus("❌ Impossible de démarrer le microphone.");
     }
   };
-
-  const bestMatch = results[0];
+ const bestMatch = results[0];
 
   const bestMatchIsFavorite = bestMatch
     ? favorites.some(
