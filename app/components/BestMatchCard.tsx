@@ -6,6 +6,11 @@ type Props = {
   ayah: number;
   arabic: string;
   confidence: number;
+  occurrences?: Array<{
+    surahNumber: number;
+    ayah: number;
+    surahName: string;
+  }>;
   isFavorite: boolean;
   onToggleFavorite: () => void;
 };
@@ -17,6 +22,7 @@ export default function BestMatchCard({
   ayah,
   arabic,
   confidence,
+  occurrences = [],
   isFavorite,
   onToggleFavorite,
 }: Props) {
@@ -90,6 +96,13 @@ AyaScan Quran Finder
       <p className="mt-6 text-2xl text-amber-200">
         {surahArabic}
       </p>
+
+      {occurrences.length > 0 && (
+        <p className="mt-3 text-sm text-slate-300">
+          Ce même texte apparaît aussi dans :{" "}
+          {occurrences.map((item) => `${item.surahName} ${item.surahNumber}:${item.ayah}`).join(" · ")}
+        </p>
+      )}
     </div>
   );
 }

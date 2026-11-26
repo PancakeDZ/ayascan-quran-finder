@@ -29,6 +29,7 @@ type Verse = {
 type SearchResult = {
   verse: Verse;
   score: number;
+  occurrences?: Verse[];
 };
 
 type RecognitionEvent = {
@@ -49,7 +50,7 @@ type RecognitionType = {
   start(): void;
   stop(): void;
   onresult: ((event: RecognitionEvent) => void) | null;
-  onerror: (() => void) | null;
+  onerror: ((event: { error: string }) => void) | null;
   onend: (() => void) | null;
 };
 
@@ -99,18 +100,14 @@ function wordSimilarity(first: string, second: string): number {
     for (let j = 1; j <= b.length; j++) {
       let substitutionCost = a[i - 1] === b[j - 1] ? 0 : 1;
 
-      // Certaines lettres peuvent être confondues
-      // par la reconnaissance vocale
-      if (
-        (a[i - 1] === "ق" && b[j - 1] === "ك") ||
-        (a[i - 1] === "ك" && b[j - 1] === "ق")
-      ) {
-        substitutionCost = 0.45;
-      }
+      // Variantes phonétiques fréquentes dans les transcriptions vocales.
+      // Le coût reste non nul pour éviter de confondre systématiquement les lettres.
+      const letterPair = a[i - 1] + b[j - 1];
 
-      if (
-        (a[i - 1] === "ت" && b[j - 1] === "ث") ||
-        (a[i - 1] === "ث" && b[j - 1] === "ت")
+      if (["قك", "كق"].includes(letterPair)) {
+        substitutionCost = 0.45;
+      } else if (
+        ["تث", "ثت", "ذز", "زذ", "ظض", "ضظ", "سص", "صس"].includes(letterPair)
       ) {
         substitutionCost = 0.5;
       }
@@ -169,7 +166,11 @@ export default function Home() {
 const [historyLoaded, setHistoryLoaded] = useState(false);
 
   const recognitionRef = useRef<RecognitionType | null>(null);
-const latestBestResultRef = useRef<SearchResult | null>(null);
+  const latestBestResultRef = useRef<SearchResult | null>(null);
+  const shouldContinueListeningRef = useRef(false);
+  const sessionBaseTranscriptRef = useRef("");
+  const transcriptRef = useRef("");
+  const restartTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
  
   // Charger les favoris enregistrés dans le navigateur
   useEffect(() => {
@@ -391,6 +392,22 @@ const saveBestResultToHistory = () => {
 
     const matches: SearchResult[] = [];
 
+    // Cache temporaire des similarités calculées pendant cette recherche.
+    const similarityCache = new Map<string, number>();
+
+    const getCachedSimilarity = (first: string, second: string) => {
+      const key = first + "\u0000" + second;
+      const cached = similarityCache.get(key);
+
+      if (cached !== undefined) {
+        return cached;
+      }
+
+      const similarity = wordSimilarity(first, second);
+      similarityCache.set(key, similarity);
+      return similarity;
+    };
+
     for (let index = 0; index < quranVerses.length; index++) {
       const verse = quranVerses[index];
       const verseTokens = normalizedVerseTokens[index];
@@ -424,10 +441,15 @@ const saveBestResultToHistory = () => {
             continue;
           }
 
-          const similarity = wordSimilarity(
-            inputWord,
-            verseTokens[wordIndex]
-          );
+          const candidateWord = verseTokens[wordIndex];
+
+          if (inputWord === candidateWord) {
+            bestSimilarity = 1;
+            bestIndex = wordIndex;
+            break;
+          }
+
+          const similarity = getCachedSimilarity(inputWord, candidateWord);
 
           if (similarity > bestSimilarity) {
             bestSimilarity = similarity;
@@ -462,49 +484,54 @@ const saveBestResultToHistory = () => {
 
       matches.sort((a, b) => b.score - a.score);
 
-    const rankedResults = matches.slice(0, 5);
+    // Regrouper les versets au texte arabe intégral identique.
+    const groupedMatches = new Map<string, SearchResult>();
 
-    setResults(rankedResults);
+    for (const match of matches) {
+      const verseKey = normalizeArabic(match.verse.arabic);
+      const existingMatch = groupedMatches.get(verseKey);
 
-    // Conserver uniquement le meilleur résultat
-    // pour l'enregistrer à la fin de l'écoute
-    latestBestResultRef.current = rankedResults[0] ?? null;
-  };
-
-  // Effacer les résultats
-  const clearResults = () => {
-    if (recognitionRef.current) {
-      const recognition = recognitionRef.current;
-      recognitionRef.current = null;
-
-      recognition.stop();
+      if (existingMatch) {
+        existingMatch.occurrences = [
+          ...(existingMatch.occurrences ?? [existingMatch.verse]),
+          match.verse,
+        ];
+        existingMatch.score = Math.max(existingMatch.score, match.score);
+      } else {
+        groupedMatches.set(verseKey, {
+          ...match,
+          occurrences: [match.verse],
+        });
+      }
     }
 
-       latestBestResultRef.current = null;
-    setListening(false);
-    setTranscript("");
-    setResults([]);
-    setStatus("Touchez ﷽ pour commencer.");
-  };
+    const rankedResults = [...groupedMatches.values()]
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5);
 
-  // Arrêter la reconnaissance vocale
-  const stopListening = () => {
-    const recognition = recognitionRef.current;
+    // Une transcription intermédiaire moins bonne ne remplace pas
+    // une correspondance déjà plus fiable.
+    if (rankedResults.length > 0) {
+      setResults((current) => {
+        if (current[0] && current[0].score > rankedResults[0].score) {
+          return current;
+        }
+        return rankedResults;
+      });
 
-    saveBestResultToHistory();
-
-    if (recognition) {
-      recognitionRef.current = null;
-      recognition.stop();
+      const newBest = rankedResults[0];
+      const previousBest = latestBestResultRef.current;
+      if (!previousBest || newBest.score >= previousBest.score) {
+        latestBestResultRef.current = newBest;
+      }
     }
-
-    setListening(false);
-    setStatus("⏹️ Récitation arrêtée.");
   };
 
-  // Démarrer la reconnaissance vocale
-  const startListening = () => {
-    if (recognitionRef.current) {
+  // Créer une session de reconnaissance vocale.
+  // Le navigateur peut interrompre une session après une pause : on la relance
+  // automatiquement en conservant le texte déjà reconnu.
+  const startRecognitionSession = () => {
+    if (!shouldContinueListeningRef.current || recognitionRef.current) {
       return;
     }
 
@@ -514,76 +541,161 @@ const saveBestResultToHistory = () => {
     };
 
     const SpeechRecognitionConstructor =
-      speechWindow.SpeechRecognition ||
-      speechWindow.webkitSpeechRecognition;
+      speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
 
     if (!SpeechRecognitionConstructor) {
+      shouldContinueListeningRef.current = false;
+      setListening(false);
       setStatus("❌ Reconnaissance vocale non supportée.");
       return;
     }
 
     const recognition = new SpeechRecognitionConstructor();
-
     recognitionRef.current = recognition;
-
     recognition.lang = "ar-SA";
     recognition.continuous = true;
-    recognition.interimResults = false;
-
-    latestBestResultRef.current = null;
+    recognition.interimResults = true;
 
     recognition.onresult = (event) => {
-      if (recognitionRef.current !== recognition) {
+      if (recognitionRef.current !== recognition) return;
+
+      const sessionText = Array.from(
+        { length: event.results.length },
+        (_, index) => event.results[index][0].transcript
+      ).join(" ").trim();
+
+      const recognizedText = [
+        sessionBaseTranscriptRef.current,
+        sessionText,
+      ].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+
+      if (!recognizedText) return;
+
+      transcriptRef.current = recognizedText;
+      setTranscript(recognizedText);
+      findVerse(recognizedText);
+      setStatus("🎙️ Récitation reconnue. Écoute en cours...");
+    };
+
+    recognition.onerror = (event) => {
+      if (recognitionRef.current !== recognition) return;
+
+      const errorMessages: Record<string, string> = {
+        "not-allowed": "❌ Accès au microphone refusé. Autorisez le microphone dans votre navigateur.",
+        "service-not-allowed": "❌ Le service de reconnaissance vocale n'est pas autorisé.",
+        "audio-capture": "❌ Aucun microphone utilisable n'a été détecté.",
+        "no-speech": "Pause détectée. AyaScan conserve votre récitation et reprend l'écoute...",
+        network: "❌ Problème de connexion au service vocal. Vérifiez votre connexion puis réessayez.",
+        "language-not-supported": "❌ La reconnaissance arabe n'est pas disponible dans ce navigateur.",
+        aborted: "Écoute interrompue. Vous pouvez reprendre votre récitation.",
+      };
+
+      if (event.error === "no-speech") {
+        setStatus(errorMessages[event.error]);
         return;
       }
 
-      const recognizedText = Array.from(
-        { length: event.results.length },
-        (_, index) => event.results[index][0].transcript
-      )
-        .join(" ")
-        .trim();
-
-      setTranscript(recognizedText);
-      findVerse(recognizedText);
-
+      shouldContinueListeningRef.current = false;
+      recognitionRef.current = null;
+      saveBestResultToHistory();
+      setListening(false);
       setStatus(
-        "🎙️ Récitation reconnue. Écoute en cours..."
+        errorMessages[event.error] ??
+        "❌ La reconnaissance vocale a rencontré un problème. Vous pouvez réessayer."
       );
     };
 
-    recognition.onerror = () => {
-      if (recognitionRef.current === recognition) {
-        recognitionRef.current = null;
-        latestBestResultRef.current = null;
-        setListening(false);
-        setStatus("❌ Une erreur est survenue.");
-      }
-    };
-
     recognition.onend = () => {
-      if (recognitionRef.current === recognition) {
-        saveBestResultToHistory();
+      if (recognitionRef.current !== recognition) return;
 
-        recognitionRef.current = null;
-        setListening(false);
-        setStatus("⏹️ Écoute terminée.");
+      recognitionRef.current = null;
+
+      if (shouldContinueListeningRef.current) {
+        sessionBaseTranscriptRef.current = transcriptRef.current;
+        setStatus("Reprise de l'écoute...");
+
+        if (restartTimeoutRef.current) {
+          clearTimeout(restartTimeoutRef.current);
+        }
+
+        restartTimeoutRef.current = setTimeout(() => {
+          restartTimeoutRef.current = null;
+          startRecognitionSession();
+        }, 350);
+        return;
       }
-    };
 
-    setListening(true);
-    setStatus("🔊 Écoute en cours...");
-    setResults([]);
-    setTranscript("");
+      saveBestResultToHistory();
+      setListening(false);
+      setStatus("⏹️ Écoute terminée.");
+    };
 
     try {
       recognition.start();
     } catch {
       recognitionRef.current = null;
-      latestBestResultRef.current = null;
+      shouldContinueListeningRef.current = false;
+      saveBestResultToHistory();
       setListening(false);
       setStatus("❌ Impossible de démarrer le microphone.");
     }
+  };
+
+  // Effacer les résultats et annuler toute reprise automatique.
+  const clearResults = () => {
+    shouldContinueListeningRef.current = false;
+
+    if (restartTimeoutRef.current) {
+      clearTimeout(restartTimeoutRef.current);
+      restartTimeoutRef.current = null;
+    }
+
+    const recognition = recognitionRef.current;
+    recognitionRef.current = null;
+    if (recognition) recognition.stop();
+
+    latestBestResultRef.current = null;
+    transcriptRef.current = "";
+    sessionBaseTranscriptRef.current = "";
+    setListening(false);
+    setTranscript("");
+    setResults([]);
+    setStatus("Touchez ﷽ pour commencer.");
+  };
+
+  // Arrêter l'écoute sans effacer le texte ni les résultats.
+  const stopListening = () => {
+    shouldContinueListeningRef.current = false;
+
+    if (restartTimeoutRef.current) {
+      clearTimeout(restartTimeoutRef.current);
+      restartTimeoutRef.current = null;
+    }
+
+    saveBestResultToHistory();
+
+    const recognition = recognitionRef.current;
+    recognitionRef.current = null;
+    if (recognition) recognition.stop();
+
+    setListening(false);
+    setStatus("⏹️ Récitation arrêtée.");
+  };
+
+  // Démarrer une nouvelle récitation.
+  const startListening = () => {
+    if (recognitionRef.current || shouldContinueListeningRef.current) return;
+
+    shouldContinueListeningRef.current = true;
+    transcriptRef.current = "";
+    sessionBaseTranscriptRef.current = "";
+    latestBestResultRef.current = null;
+
+    setListening(true);
+    setStatus("🔊 Écoute en cours...");
+    setResults([]);
+    setTranscript("");
+    startRecognitionSession();
   };
  const bestMatch = results[0];
 
@@ -685,6 +797,19 @@ const saveBestResultToHistory = () => {
               ayah={bestMatch.verse.ayah}
               arabic={bestMatch.verse.arabic}
               confidence={bestMatch.score}
+              occurrences={(bestMatch.occurrences ?? [])
+                .filter(
+                  (verse) =>
+                    verse.surahNumber !== bestMatch.verse.surahNumber ||
+                    verse.ayah !== bestMatch.verse.ayah
+                )
+                .map((verse) => ({
+                  surahNumber: verse.surahNumber,
+                  ayah: verse.ayah,
+                  surahName:
+                    surahNames[verse.surahNumber as keyof typeof surahNames] ??
+                    `Sourate ${verse.surahNumber}`,
+                }))}
               isFavorite={bestMatchIsFavorite}
               onToggleFavorite={() => toggleFavorite(bestMatch)}
             />
