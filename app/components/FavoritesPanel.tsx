@@ -1,4 +1,3 @@
-
 export type FavoriteItem = {
   surahName: string;
   surahNumber: number;
@@ -16,59 +15,41 @@ export default function FavoritesPanel({
   onRemove,
 }: Props) {
   return (
-    <section className="mt-12 rounded-3xl border border-amber-500/30 bg-amber-950/20 p-6">
-
-      <h3 className="text-xl font-bold mb-4 text-amber-300">
-        ☆ Mes favoris ({favorites.length})
+    <section className="rounded-2xl border border-[#e4e8e1] bg-white p-5 shadow-sm sm:p-6">
+      <h3 className="mb-4 text-lg font-semibold text-[#245541]">
+        Mes favoris <span className="text-sm font-normal text-[#8a958e]">({favorites.length})</span>
       </h3>
-
       {favorites.length === 0 ? (
-        <p className="text-slate-400">
-          Aucun favori pour le moment. Utilisez le bouton
-          « Ajouter aux favoris » sur un verset.
+        <p className="text-sm leading-relaxed text-[#78877e]">
+          Aucun favori pour le moment. Vous pourrez enregistrer un verset depuis ses résultats.
         </p>
       ) : (
-        <div className="space-y-4">
-
+        <div className="space-y-3">
           {favorites.map((item) => (
             <div
               key={`${item.surahNumber}-${item.ayah}`}
-              className="rounded-xl bg-slate-900 p-4"
+              className="rounded-xl border border-[#edf0eb] bg-[#fafbf9] p-4"
             >
-              <div className="flex flex-wrap justify-between items-center gap-3">
-
-                <p className="font-semibold">
-                  Sourate {item.surahNumber} - {item.surahName}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="font-semibold text-[#315647]">
+                  Sourate {item.surahNumber} · {item.surahName}
                 </p>
-
                 <button
                   type="button"
-                  onClick={() =>
-                    onRemove(item.surahNumber, item.ayah)
-                  }
-                  className="rounded-lg bg-red-800 px-3 py-2 text-sm hover:bg-red-700 transition-colors"
+                  onClick={() => onRemove(item.surahNumber, item.ayah)}
+                  className="text-sm font-medium text-[#9b5550] hover:underline"
                 >
                   Retirer
                 </button>
-
               </div>
-
-              <p className="mt-2 text-sm text-emerald-300">
-                Verset {item.ayah}
-              </p>
-
-              <p
-                dir="rtl"
-                className="mt-3 text-2xl leading-loose text-amber-100"
-              >
+              <p className="mt-1 text-xs text-[#849087]">Verset {item.ayah}</p>
+              <p dir="rtl" className="mt-3 text-xl leading-loose text-[#244c3d]">
                 {item.arabic}
               </p>
             </div>
           ))}
-
         </div>
       )}
-
     </section>
   );
 }
