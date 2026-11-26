@@ -1,4 +1,3 @@
-
 type Props = {
   surahName: string;
   surahArabic: string;
@@ -38,58 +37,45 @@ AyaScan Quran Finder
   };
 
   return (
-    <div className="rounded-3xl border border-amber-500/30 bg-white/5 backdrop-blur-md p-8 shadow-[0_0_40px_rgba(16,185,129,0.2)]">
-
-      <p className="text-amber-300 mb-2 text-sm uppercase tracking-widest">
-        ✦ Meilleure correspondance
+    <section className="rounded-2xl border border-[#e4e8e1] bg-white p-6 shadow-[0_8px_28px_rgba(23,61,50,0.06)] sm:p-8">
+      <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-[#987b43]">
+        Meilleure correspondance
       </p>
-
-      <h2 className="text-3xl font-bold">
-        {surahName}
-      </h2>
-
-      <p className="text-emerald-300 mt-2">
-        Sourate {surahNumber} • Verset {ayah}
-      </p>
-
-      <p
-        dir="rtl"
-        className="mt-8 text-5xl leading-loose text-amber-100"
-      >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-semibold text-[#245541] sm:text-3xl">
+            {surahName}
+          </h2>
+          <p className="mt-1 text-sm text-[#78877e]">
+            Sourate {surahNumber} · Verset {ayah}
+          </p>
+        </div>
+        <span className="rounded-full bg-[#edf5ef] px-3 py-1.5 text-sm font-semibold text-[#28634b]">
+          {confidence}% de correspondance
+        </span>
+      </div>
+      <p dir="rtl" className="mt-7 text-3xl leading-[2.2] text-[#234b3c] sm:text-4xl">
         {arabic}
       </p>
-
-      <p className="mt-6 text-emerald-300">
-        Confiance : {confidence}%
-      </p>
-
-      <div className="mt-8 flex flex-wrap gap-4 justify-center">
-
+      <div className="mt-6 flex flex-wrap gap-2">
         <button
           type="button"
           onClick={copyVerse}
-          className="rounded-xl bg-emerald-700 px-4 py-2 hover:bg-emerald-600 transition-colors"
+          className="rounded-full bg-[#0d5945] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#174b3b]"
         >
-          ▣ Copier
+          Copier le verset
         </button>
-
         <button
           type="button"
           onClick={onToggleFavorite}
-          className={`rounded-xl px-4 py-2 transition-colors ${
-            isFavorite
-              ? "bg-amber-600 hover:bg-amber-500"
-              : "bg-slate-700 hover:bg-slate-600"
-          }`}
+          className="rounded-full border border-[#d8e1da] bg-white px-4 py-2.5 text-sm font-semibold text-[#315b48] transition-colors hover:bg-[#f4f7f4]"
         >
-          {isFavorite ? "★ Retirer des favoris" : "☆ Ajouter aux favoris"}
+          {isFavorite ? "Retirer des favoris" : "Ajouter aux favoris"}
         </button>
-
       </div>
-
-      <p className="mt-6 text-2xl text-amber-200">
+      <p dir="rtl" className="mt-6 text-xl text-[#987b43]">
         {surahArabic}
       </p>
-    </div>
+    </section>
   );
 }
