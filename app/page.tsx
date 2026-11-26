@@ -156,7 +156,7 @@ for (const tokens of normalizedVerseTokens) {
 export default function Home() {
   const [transcript, setTranscript] = useState("");
   const [status, setStatus] = useState(
-    "Touchez ﷽ pour commencer."
+    "En attente de votre récitation."
   );
 
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -484,7 +484,7 @@ const saveBestResultToHistory = () => {
     setListening(false);
     setTranscript("");
     setResults([]);
-    setStatus("Touchez ﷽ pour commencer.");
+    setStatus("En attente de votre récitation.");
   };
 
   // Arrêter la reconnaissance vocale
@@ -596,87 +596,95 @@ const saveBestResultToHistory = () => {
     : false;
 
   return (
-    <main className="min-h-screen bg-[#f7f8f5] text-[#173d32]">
-      <div className="mx-auto max-w-6xl px-5 py-8 sm:px-8 sm:py-12">
-        <header className="flex flex-col items-center text-center">
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#0d5945] text-xl font-semibold text-[#e8d5a4] shadow-sm">
-              A
-            </div>
+    <main className="ayascan-page relative min-h-screen overflow-hidden text-white">
+      <div aria-hidden="true" className="ayascan-background absolute inset-0" />
+      <div aria-hidden="true" className="ayascan-overlay absolute inset-0" />
+
+      <div className="relative z-10 mx-auto max-w-6xl px-5 pb-8 pt-7 sm:px-8 sm:pt-9">
+        <header className="relative flex flex-col items-center text-center">
+          <div className="flex items-center gap-3 sm:gap-5">
+            <svg aria-hidden="true" viewBox="0 0 100 82" className="h-16 w-20 text-[#f4c85f] sm:h-24 sm:w-28" fill="none">
+              <path d="M50 18 45 5l5 7 5-7-5 13" fill="currentColor" />
+              <path d="M8 57c15-3 26 0 42 13 16-13 27-16 42-13L81 29c-13-8-23-6-31 5-8-11-18-13-31-5L8 57Z" stroke="currentColor" strokeWidth="3.5" strokeLinejoin="round"/>
+              <path d="M50 34v36M14 49l28 12M86 49 58 61M19 37l22 15M81 37 59 52" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
+              <path d="M5 63c16-4 29 1 45 15 16-14 29-19 45-15" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round"/>
+            </svg>
+            <div className="h-20 w-px bg-[#f4d37b]/90 sm:h-24" />
             <div className="text-left">
-              <h1 className="text-3xl font-semibold tracking-tight text-[#174b3b] sm:text-4xl">
-                AyaScan
+              <h1 className="font-serif text-5xl font-medium tracking-tight text-white drop-shadow sm:text-7xl">
+                Aya<span className="text-[#f5d17a]">Scan</span>
               </h1>
-              <p className="mt-0.5 text-[11px] font-semibold tracking-[0.22em] text-[#8a7448] uppercase">
+              <p className="mt-0.5 text-center font-serif text-xl text-[#f5d17a] sm:text-2xl">
                 Quran Finder
               </p>
             </div>
           </div>
-          <p className="mt-7 max-w-xl text-base leading-relaxed text-[#52685f] sm:text-lg">
-            Retrouvez les versets du Coran à partir de votre récitation.
+
+          <div className="absolute right-0 top-0 hidden rounded-full border-2 border-[#e9bd4f] bg-[#064b39]/90 px-5 py-2 text-lg font-medium text-white shadow-lg sm:block">
+            ◉ &nbsp; FR⌄
+          </div>
+
+          <p className="mt-8 max-w-2xl font-serif text-2xl italic leading-snug text-white drop-shadow-lg sm:mt-9 sm:text-4xl">
+            Trouvez facilement les versets du Coran
+            <span className="block">par votre voix</span>
           </p>
-          <div className="mt-5 h-px w-20 bg-[#c6a45e]" />
+          <div className="mt-5 flex w-full max-w-lg items-center gap-3 text-[#f2c65e]">
+            <span className="h-[2px] flex-1 bg-gradient-to-r from-transparent to-[#f2c65e]" />
+            <span className="text-3xl">✦</span>
+            <span className="h-[2px] flex-1 bg-gradient-to-l from-transparent to-[#f2c65e]" />
+          </div>
         </header>
 
         <section
           aria-label="Recherche vocale"
-          className="mx-auto mt-9 flex max-w-2xl flex-col items-center rounded-[1.75rem] border border-[#e6e5dc] bg-white px-6 py-8 text-center shadow-[0_12px_40px_rgba(23,61,50,0.07)] sm:mt-11 sm:px-10 sm:py-10"
+          className="ayascan-glass mx-auto mt-9 flex max-w-3xl flex-col items-center rounded-[2.5rem] border-2 border-[#f2c65e] px-5 py-6 text-center text-[#064a38] shadow-[0_18px_60px_rgba(0,0,0,0.22)] sm:mt-12 sm:px-10 sm:py-7"
         >
-          <p dir="rtl" className="text-2xl leading-relaxed text-[#96743a] sm:text-3xl">
-            بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
+          <p className="text-xl font-semibold leading-relaxed sm:text-2xl">
+            <span className="text-[#07513c]">Touchez </span>
+            <span dir="rtl" className="font-serif text-[#b07c12]">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</span>
+            <span className="text-[#07513c]"> pour commencer</span>
           </p>
-          <p className="mt-3 text-sm text-[#748078]">
-            Commencez votre récitation
-          </p>
-
-          <div className="mt-7">
+          <div className="mt-5 rounded-full p-2 ring-1 ring-[#e8bd50]/80">
             <BasmalaButton onClick={startListening} listening={listening} />
           </div>
-
-          <p className="mt-5 max-w-md text-sm leading-relaxed text-[#63756c]">
+          <p className="mt-4 max-w-lg text-sm leading-relaxed text-[#315b4b]">
             Récitez un passage du Coran naturellement. AyaScan recherche les versets correspondants.
           </p>
-          <div aria-live="polite" className="mt-4 min-h-6 text-sm font-medium text-[#8a7448]">
+          <div aria-live="polite" className="mt-3 min-h-6 text-sm font-semibold text-[#9b711d]">
             {status}
           </div>
-
-          <div className="mt-4 flex flex-wrap justify-center gap-3">
-            {listening && (
-              <button
-                onClick={stopListening}
-                className="rounded-full border border-[#e7caca] bg-[#fff7f6] px-5 py-2.5 text-sm font-semibold text-[#9b4545] transition-colors hover:bg-[#fceeed]"
-              >
-                Arrêter
-              </button>
-            )}
+          <div className="mt-4 flex w-full max-w-xl flex-wrap items-center justify-center gap-3 sm:gap-5">
             <button
               onClick={clearResults}
-              className="rounded-full border border-[#d9e2dc] bg-white px-5 py-2.5 text-sm font-semibold text-[#426052] transition-colors hover:bg-[#f4f7f4]"
+              className="flex min-w-48 items-center justify-center gap-3 rounded-full border-2 border-[#e8b83d] bg-white/55 px-6 py-3 text-base font-semibold text-[#07513c] shadow-md transition hover:bg-white/80"
             >
+              <span aria-hidden="true" className="text-xl">▣</span>
               Effacer
+            </button>
+            <span aria-hidden="true" className="hidden h-11 w-px bg-[#d9ad46] sm:block" />
+            <button
+              onClick={listening ? stopListening : startListening}
+              className="flex min-w-48 items-center justify-center gap-3 rounded-full border-2 border-[#07513c] bg-[#fffdf5]/75 px-6 py-3 text-base font-semibold text-[#07513c] shadow-md transition hover:bg-white"
+            >
+              <span aria-hidden="true" className="text-xl">{listening ? "■" : "▶"}</span>
+              {listening ? "Arrêter" : "Démarrer"}
             </button>
           </div>
         </section>
 
         {transcript && (
-          <section className="mx-auto mt-7 max-w-3xl rounded-2xl border border-[#e5e8e2] bg-white p-5 text-center shadow-sm sm:p-6">
-            <h2 className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-[#987b43]">
+          <section className="mx-auto mt-7 max-w-3xl rounded-2xl border border-[#e9c66b]/70 bg-[#064735]/85 p-5 text-center shadow-lg backdrop-blur-md">
+            <h2 className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-[#f4ce72]">
               Texte reconnu
             </h2>
-            <p dir="rtl" className="text-2xl leading-loose text-[#244c3d]">
-              {transcript}
-            </p>
+            <p dir="rtl" className="text-2xl leading-loose text-white">{transcript}</p>
           </section>
         )}
 
         {bestMatch && (
           <div className="mx-auto mt-7 max-w-3xl">
             <BestMatchCard
-              surahName={
-                surahNames[
-                  bestMatch.verse.surahNumber as keyof typeof surahNames
-                ]
-              }
+              surahName={surahNames[bestMatch.verse.surahNumber as keyof typeof surahNames]}
               surahArabic={bestMatch.verse.surahArabic}
               surahNumber={bestMatch.verse.surahNumber}
               ayah={bestMatch.verse.ayah}
@@ -689,28 +697,17 @@ const saveBestResultToHistory = () => {
         )}
 
         {results.length > 1 && (
-          <section className="mx-auto mt-7 max-w-3xl rounded-2xl border border-[#e5e8e2] bg-white p-5 shadow-sm sm:p-6">
-            <h2 className="mb-4 text-lg font-semibold text-[#245541]">
-              Autres résultats possibles
-            </h2>
+          <section className="mx-auto mt-7 max-w-3xl rounded-2xl border border-[#e9c66b]/50 bg-[#064735]/90 p-5 shadow-lg backdrop-blur-md sm:p-6">
+            <h2 className="mb-4 text-lg font-semibold text-[#f4ce72]">Autres résultats possibles</h2>
             <div className="grid gap-3">
               {results.slice(1).map((result, index) => (
-                <div
-                  key={`${result.verse.surahNumber}-${result.verse.ayah}`}
-                  className="rounded-xl border border-[#edf0eb] bg-[#fafbf9] p-4"
-                >
+                <div key={`${result.verse.surahNumber}-${result.verse.ayah}`} className="rounded-xl border border-white/15 bg-white/5 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="font-semibold text-[#315647]">
-                      #{index + 2} · {surahNames[result.verse.surahNumber as keyof typeof surahNames]}
-                    </p>
-                    <span className="text-sm font-semibold text-[#987b43]">{result.score}%</span>
+                    <p className="font-semibold text-white">#{index + 2} · {surahNames[result.verse.surahNumber as keyof typeof surahNames]}</p>
+                    <span className="text-sm text-[#f4ce72]">{result.score}%</span>
                   </div>
-                  <p className="mt-1 text-sm text-[#77857d]">
-                    Verset {result.verse.ayah}
-                  </p>
-                  <p dir="rtl" className="mt-3 text-xl leading-loose text-[#244c3d]">
-                    {result.verse.arabic}
-                  </p>
+                  <p className="mt-1 text-sm text-emerald-100/80">Verset {result.verse.ayah}</p>
+                  <p dir="rtl" className="mt-3 text-xl leading-loose text-white">{result.verse.arabic}</p>
                 </div>
               ))}
             </div>
@@ -719,19 +716,15 @@ const saveBestResultToHistory = () => {
 
         <div className="mt-9 grid gap-5 lg:grid-cols-2">
           <FavoritesPanel favorites={favorites} onRemove={removeFavorite} />
-          <HistoryPanel
-            history={history}
-            onRemove={removeHistoryItem}
-            onClear={clearHistory}
-          />
+          <HistoryPanel history={history} onRemove={removeHistoryItem} onClear={clearHistory} />
         </div>
 
-        <footer className="mt-12 border-t border-[#e4e8e1] pt-6 text-center text-xs text-[#7c8981]">
-          <p className="text-sm italic text-[#52685f]">
-            « Nous t'avons certes fait descendre le Coran, pour que tu en fasses une lecture aux gens. »
+        <footer className="mx-auto mt-10 max-w-2xl text-center font-serif">
+          <p className="text-xl italic leading-relaxed text-white drop-shadow sm:text-2xl">
+            « Nous t'avons certes fait descendre le Coran,<br className="hidden sm:block" /> pour que tu en fasses une lecture aux gens. »
           </p>
-          <p className="mt-2 font-medium text-[#987b43]">Sourate 17, verset 105</p>
-          <p className="mt-4">AyaScan · Recherche coranique par la voix</p>
+          <p className="mt-3 text-lg font-semibold text-[#f5c84f]">Sourate 17, Verset 105</p>
+          <div className="mx-auto mt-7 h-2 max-w-xl rounded-full border-y border-[#eac35b] bg-[#064735]/80" />
         </footer>
       </div>
     </main>
