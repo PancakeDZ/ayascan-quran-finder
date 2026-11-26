@@ -49,7 +49,7 @@ type RecognitionType = {
   start(): void;
   stop(): void;
   onresult: ((event: RecognitionEvent) => void) | null;
-  onerror: (() => void) | null;
+  onerror: ((event: { error: string }) => void) | null;
   onend: (() => void) | null;
 };
 
@@ -578,13 +578,38 @@ const saveBestResultToHistory = () => {
       );
     };
 
-    recognition.onerror = () => {
-      if (recognitionRef.current === recognition) {
-        recognitionRef.current = null;
-        latestBestResultRef.current = null;
-        setListening(false);
-        setStatus("❌ Une erreur est survenue.");
+    recognition.onerror = (event) => {
+      if (recognitionRef.current !== recognition) {
+        return;
       }
+
+      // Conserver le meilleur verset déjà trouvé, même si le micro
+      // rencontre ensuite une erreur ou si le navigateur interrompt l'écoute.
+      saveBestResultToHistory();
+      recognitionRef.current = null;
+      setListening(false);
+
+      const errorMessages: Record<string, string> = {
+        "not-allowed":
+          "❌ Accès au microphone refusé. Autorisez le microphone dans votre navigateur.",
+        "service-not-allowed":
+          "❌ Le service de reconnaissance vocale n'est pas autorisé.",
+        "audio-capture":
+          "❌ Aucun microphone utilisable n'a été détecté.",
+        "no-speech":
+          "Aucune voix détectée. Vous pouvez réessayer en parlant un peu plus près du microphone.",
+        network:
+          "❌ Problème de connexion au service vocal. Vérifiez votre connexion puis réessayez.",
+        "language-not-supported":
+          "❌ La reconnaissance arabe n'est pas disponible dans ce navigateur.",
+        aborted:
+          "Écoute interrompue. Vous pouvez reprendre votre récitation.",
+      };
+
+      setStatus(
+        errorMessages[event.error] ??
+          "❌ La reconnaissance vocale a rencontré un problème. Vous pouvez réessayer."
+      );
     };
 
     recognition.onend = () => {
