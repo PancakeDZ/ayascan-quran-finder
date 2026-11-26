@@ -29,6 +29,7 @@ type Verse = {
 type SearchResult = {
   verse: Verse;
   score: number;
+  occurrences?: Verse[];
 };
 
 type RecognitionEvent = {
@@ -49,7 +50,7 @@ type RecognitionType = {
   start(): void;
   stop(): void;
   onresult: ((event: RecognitionEvent) => void) | null;
-  onerror: (() => void) | null;
+  onerror: ((event: { error: string }) => void) | null;
   onend: (() => void) | null;
 };
 
@@ -101,16 +102,16 @@ function wordSimilarity(first: string, second: string): number {
 
       // Certaines lettres peuvent être confondues
       // par la reconnaissance vocale
-      if (
-        (a[i - 1] === "ق" && b[j - 1] === "ك") ||
-        (a[i - 1] === "ك" && b[j - 1] === "ق")
-      ) {
-        substitutionCost = 0.45;
-      }
+      // Variantes phonétiques fréquentes dans les transcriptions vocales.
+      // Le coût reste non nul pour éviter de confondre systématiquement les lettres.
+      const letterPair = a[i - 1] + b[j - 1];
 
-      if (
-        (a[i - 1] === "ت" && b[j - 1] === "ث") ||
-        (a[i - 1] === "ث" && b[j - 1] === "ت")
+      if (["قك", "كق"].includes(letterPair)) {
+        substitutionCost = 0.45;
+      } else if (
+        ["تث", "ثت", "ذز", "زذ", "ظض", "ضظ", "سص", "صس"].includes(
+          letterPair
+        )
       ) {
         substitutionCost = 0.5;
       }
@@ -156,7 +157,7 @@ for (const tokens of normalizedVerseTokens) {
 export default function Home() {
   const [transcript, setTranscript] = useState("");
   const [status, setStatus] = useState(
-    "Touchez ﷽ pour commencer."
+    "En attente de votre récitation."
   );
 
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -169,7 +170,11 @@ export default function Home() {
 const [historyLoaded, setHistoryLoaded] = useState(false);
 
   const recognitionRef = useRef<RecognitionType | null>(null);
-const latestBestResultRef = useRef<SearchResult | null>(null);
+  const latestBestResultRef = useRef<SearchResult | null>(null);
+  const shouldContinueListeningRef = useRef(false);
+  const sessionBaseTranscriptRef = useRef("");
+  const transcriptRef = useRef("");
+  const restartTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
  
   // Charger les favoris enregistrés dans le navigateur
   useEffect(() => {
@@ -376,7 +381,6 @@ const saveBestResultToHistory = () => {
     const normalizedInput = normalizeArabic(text);
 
     if (!normalizedInput) {
-      setResults([]);
       return;
     }
 
@@ -390,6 +394,23 @@ const saveBestResultToHistory = () => {
     }
 
     const matches: SearchResult[] = [];
+
+    // Cache temporaire : un même couple de mots peut apparaître
+    // dans de nombreux versets au cours d'une seule recherche.
+    const similarityCache = new Map<string, number>();
+
+    const getCachedSimilarity = (first: string, second: string) => {
+      const key = first + "\u0000" + second;
+      const cached = similarityCache.get(key);
+
+      if (cached !== undefined) {
+        return cached;
+      }
+
+      const similarity = wordSimilarity(first, second);
+      similarityCache.set(key, similarity);
+      return similarity;
+    };
 
     for (let index = 0; index < quranVerses.length; index++) {
       const verse = quranVerses[index];
@@ -424,9 +445,18 @@ const saveBestResultToHistory = () => {
             continue;
           }
 
-          const similarity = wordSimilarity(
+          const candidateWord = verseTokens[wordIndex];
+
+          // Une correspondance exacte est déjà le meilleur score possible.
+          if (inputWord === candidateWord) {
+            bestSimilarity = 1;
+            bestIndex = wordIndex;
+            break;
+          }
+
+          const similarity = getCachedSimilarity(
             inputWord,
-            verseTokens[wordIndex]
+            candidateWord
           );
 
           if (similarity > bestSimilarity) {
@@ -462,49 +492,61 @@ const saveBestResultToHistory = () => {
 
       matches.sort((a, b) => b.score - a.score);
 
-    const rankedResults = matches.slice(0, 5);
+    // Regrouper les versets dont le texte complet est identique
+    // après normalisation, tout en conservant toutes leurs références.
+    const groupedMatches = new Map<string, SearchResult>();
 
-    setResults(rankedResults);
+    for (const match of matches) {
+      const verseKey = normalizeArabic(match.verse.arabic);
+      const existingMatch = groupedMatches.get(verseKey);
 
-    // Conserver uniquement le meilleur résultat
-    // pour l'enregistrer à la fin de l'écoute
-    latestBestResultRef.current = rankedResults[0] ?? null;
-  };
-
-  // Effacer les résultats
-  const clearResults = () => {
-    if (recognitionRef.current) {
-      const recognition = recognitionRef.current;
-      recognitionRef.current = null;
-
-      recognition.stop();
+      if (existingMatch) {
+        existingMatch.occurrences = [
+          ...(existingMatch.occurrences ?? [existingMatch.verse]),
+          match.verse,
+        ];
+        existingMatch.score = Math.max(
+          existingMatch.score,
+          match.score
+        );
+      } else {
+        groupedMatches.set(verseKey, {
+          ...match,
+          occurrences: [match.verse],
+        });
+      }
     }
 
-       latestBestResultRef.current = null;
-    setListening(false);
-    setTranscript("");
-    setResults([]);
-    setStatus("Touchez ﷽ pour commencer.");
-  };
+    const rankedResults = [...groupedMatches.values()]
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5);
 
-  // Arrêter la reconnaissance vocale
-  const stopListening = () => {
-    const recognition = recognitionRef.current;
+    // Garder le meilleur résultat obtenu pendant toute la récitation.
+    // Une transcription provisoire moins bonne ne doit pas effacer une
+    // correspondance déjà trouvée.
+    if (rankedResults.length > 0) {
+      setResults((current) => {
+        if (current[0] && current[0].score > rankedResults[0].score) {
+          return current;
+        }
 
-    saveBestResultToHistory();
+        return rankedResults;
+      });
 
-    if (recognition) {
-      recognitionRef.current = null;
-      recognition.stop();
+      const newBest = rankedResults[0];
+      const previousBest = latestBestResultRef.current;
+
+      if (!previousBest || newBest.score >= previousBest.score) {
+        latestBestResultRef.current = newBest;
+      }
     }
-
-    setListening(false);
-    setStatus("⏹️ Récitation arrêtée.");
   };
 
-  // Démarrer la reconnaissance vocale
-  const startListening = () => {
-    if (recognitionRef.current) {
+  // Créer une session de reconnaissance vocale.
+  // Le navigateur peut terminer une session après une pause : on la relance
+  // automatiquement en conservant le texte et les résultats déjà obtenus.
+  const startRecognitionSession = () => {
+    if (!shouldContinueListeningRef.current || recognitionRef.current) {
       return;
     }
 
@@ -518,72 +560,196 @@ const saveBestResultToHistory = () => {
       speechWindow.webkitSpeechRecognition;
 
     if (!SpeechRecognitionConstructor) {
+      shouldContinueListeningRef.current = false;
+      setListening(false);
       setStatus("❌ Reconnaissance vocale non supportée.");
       return;
     }
 
     const recognition = new SpeechRecognitionConstructor();
-
     recognitionRef.current = recognition;
 
     recognition.lang = "ar-SA";
     recognition.continuous = true;
-    recognition.interimResults = false;
-
-    latestBestResultRef.current = null;
+    // Les résultats intermédiaires permettent de chercher dès quelques mots.
+    recognition.interimResults = true;
 
     recognition.onresult = (event) => {
       if (recognitionRef.current !== recognition) {
         return;
       }
 
-      const recognizedText = Array.from(
+      const sessionText = Array.from(
         { length: event.results.length },
         (_, index) => event.results[index][0].transcript
       )
         .join(" ")
         .trim();
 
+      const recognizedText = [
+        sessionBaseTranscriptRef.current,
+        sessionText,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      if (!recognizedText) {
+        return;
+      }
+
+      transcriptRef.current = recognizedText;
       setTranscript(recognizedText);
       findVerse(recognizedText);
 
+      setStatus("🎙️ Récitation reconnue. Écoute en cours...");
+    };
+
+    recognition.onerror = (event) => {
+      if (recognitionRef.current !== recognition) {
+        return;
+      }
+
+      const errorMessages: Record<string, string> = {
+        "not-allowed":
+          "❌ Accès au microphone refusé. Autorisez le microphone dans votre navigateur.",
+        "service-not-allowed":
+          "❌ Le service de reconnaissance vocale n'est pas autorisé.",
+        "audio-capture":
+          "❌ Aucun microphone utilisable n'a été détecté.",
+        "no-speech":
+          "Pause détectée. AyaScan conserve votre récitation et reprend l'écoute...",
+        network:
+          "❌ Problème de connexion au service vocal. Vérifiez votre connexion puis réessayez.",
+        "language-not-supported":
+          "❌ La reconnaissance arabe n'est pas disponible dans ce navigateur.",
+        aborted:
+          "Écoute interrompue. Vous pouvez reprendre votre récitation.",
+      };
+
+      // Une absence temporaire de voix est normale pendant une récitation.
+      // On laisse onend relancer le micro sans perdre le texte déjà reconnu.
+      if (event.error === "no-speech") {
+        setStatus(errorMessages[event.error]);
+        return;
+      }
+
+      shouldContinueListeningRef.current = false;
+      recognitionRef.current = null;
+      saveBestResultToHistory();
+      setListening(false);
+
       setStatus(
-        "🎙️ Récitation reconnue. Écoute en cours..."
+        errorMessages[event.error] ??
+          "❌ La reconnaissance vocale a rencontré un problème. Vous pouvez réessayer."
       );
     };
 
-    recognition.onerror = () => {
-      if (recognitionRef.current === recognition) {
-        recognitionRef.current = null;
-        latestBestResultRef.current = null;
-        setListening(false);
-        setStatus("❌ Une erreur est survenue.");
-      }
-    };
-
     recognition.onend = () => {
-      if (recognitionRef.current === recognition) {
-        saveBestResultToHistory();
-
-        recognitionRef.current = null;
-        setListening(false);
-        setStatus("⏹️ Écoute terminée.");
+      if (recognitionRef.current !== recognition) {
+        return;
       }
+
+      recognitionRef.current = null;
+
+      if (shouldContinueListeningRef.current) {
+        // Mémoriser le texte de cette session avant de relancer le navigateur.
+        sessionBaseTranscriptRef.current = transcriptRef.current;
+        setStatus("Reprise de l'écoute...");
+
+        if (restartTimeoutRef.current) {
+          clearTimeout(restartTimeoutRef.current);
+        }
+
+        restartTimeoutRef.current = setTimeout(() => {
+          restartTimeoutRef.current = null;
+          startRecognitionSession();
+        }, 350);
+
+        return;
+      }
+
+      saveBestResultToHistory();
+      setListening(false);
+      setStatus("⏹️ Écoute terminée.");
     };
+
+    try {
+      recognition.start();
+    } catch {
+      recognitionRef.current = null;
+      shouldContinueListeningRef.current = false;
+      saveBestResultToHistory();
+      setListening(false);
+      setStatus("❌ Impossible de démarrer le microphone.");
+    }
+  };
+
+  // Effacer les résultats et interrompre aussi toute reprise automatique.
+  const clearResults = () => {
+    shouldContinueListeningRef.current = false;
+
+    if (restartTimeoutRef.current) {
+      clearTimeout(restartTimeoutRef.current);
+      restartTimeoutRef.current = null;
+    }
+
+    const recognition = recognitionRef.current;
+    recognitionRef.current = null;
+
+    if (recognition) {
+      recognition.stop();
+    }
+
+    latestBestResultRef.current = null;
+    transcriptRef.current = "";
+    sessionBaseTranscriptRef.current = "";
+    setListening(false);
+    setTranscript("");
+    setResults([]);
+    setStatus("En attente de votre récitation.");
+  };
+
+  // Arrêter l'écoute sans effacer le texte ni les résultats.
+  const stopListening = () => {
+    shouldContinueListeningRef.current = false;
+
+    if (restartTimeoutRef.current) {
+      clearTimeout(restartTimeoutRef.current);
+      restartTimeoutRef.current = null;
+    }
+
+    saveBestResultToHistory();
+
+    const recognition = recognitionRef.current;
+    recognitionRef.current = null;
+
+    if (recognition) {
+      recognition.stop();
+    }
+
+    setListening(false);
+    setStatus("⏹️ Récitation arrêtée.");
+  };
+
+  // Démarrer une nouvelle récitation.
+  const startListening = () => {
+    if (recognitionRef.current || shouldContinueListeningRef.current) {
+      return;
+    }
+
+    shouldContinueListeningRef.current = true;
+    transcriptRef.current = "";
+    sessionBaseTranscriptRef.current = "";
+    latestBestResultRef.current = null;
 
     setListening(true);
     setStatus("🔊 Écoute en cours...");
     setResults([]);
     setTranscript("");
 
-    try {
-      recognition.start();
-    } catch {
-      recognitionRef.current = null;
-      latestBestResultRef.current = null;
-      setListening(false);
-      setStatus("❌ Impossible de démarrer le microphone.");
-    }
+    startRecognitionSession();
   };
  const bestMatch = results[0];
 
@@ -596,165 +762,180 @@ const saveBestResultToHistory = () => {
     : false;
 
   return (
-    <main className="min-h-screen bg-linear-to-br from-slate-950 via-emerald-950 to-slate-900 text-white">
+    <main className="ayascan-page relative min-h-screen overflow-hidden text-white">
+      <div aria-hidden="true" className="ayascan-background absolute inset-0" />
+      <div aria-hidden="true" className="ayascan-overlay absolute inset-0" />
 
-      <div className="max-w-6xl mx-auto px-6 py-12">
-
-        <div className="text-center">
-
-          <h1 className="text-6xl text-amber-300 mb-4">
-            ﷽
-          </h1>
-
-          <h2 className="text-5xl font-bold">
-            AyaScan
-          </h2>
-
-          <p className="mt-2 text-slate-300">
-            Quran Finder
-          </p>
-
-          <p className="mt-6 text-slate-400">
-            Retrouvez instantanément une
-            sourate à partir d&apos;une récitation.
-          </p>
-
-          <div className="mt-10 flex justify-center">
-            <BasmalaButton
-              onClick={startListening}
-              listening={listening}
-            />
+      <div className="relative z-10 mx-auto max-w-6xl px-5 pb-8 pt-7 sm:px-8 sm:pt-9">
+        <header className="relative flex flex-col items-center text-center">
+          <div className="flex items-center gap-3 sm:gap-5">
+            <svg aria-hidden="true" viewBox="0 0 100 82" className="h-16 w-20 text-[#f4c85f] sm:h-24 sm:w-28" fill="none">
+              <path d="M50 18 45 5l5 7 5-7-5 13" fill="currentColor" />
+              <path d="M8 57c15-3 26 0 42 13 16-13 27-16 42-13L81 29c-13-8-23-6-31 5-8-11-18-13-31-5L8 57Z" stroke="currentColor" strokeWidth="3.5" strokeLinejoin="round"/>
+              <path d="M50 34v36M14 49l28 12M86 49 58 61M19 37l22 15M81 37 59 52" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
+              <path d="M5 63c16-4 29 1 45 15 16-14 29-19 45-15" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round"/>
+            </svg>
+            <div className="h-20 w-px bg-[#f4d37b]/90 sm:h-24" />
+            <div className="text-left">
+              <h1 className="font-serif text-5xl font-medium tracking-tight text-white drop-shadow sm:text-7xl">
+                Aya<span className="text-[#f5d17a]">Scan</span>
+              </h1>
+              <p className="mt-0.5 text-center font-serif text-xl text-[#f5d17a] sm:text-2xl">
+                Quran Finder
+              </p>
+            </div>
           </div>
 
-          <div className="mt-6 text-emerald-300">
+          <div className="absolute right-0 top-0 hidden rounded-full border-2 border-[#e9bd4f] bg-[#064b39]/90 px-5 py-2 text-lg font-medium text-white shadow-lg sm:block">
+            ◉ &nbsp; FR⌄
+          </div>
+
+          <p className="mt-8 max-w-2xl font-serif text-2xl italic leading-snug text-white drop-shadow-lg sm:mt-9 sm:text-4xl">
+            Trouvez facilement les versets du Coran
+            <span className="block">par votre voix</span>
+          </p>
+          <div className="mt-5 flex w-full max-w-lg items-center gap-3 text-[#f2c65e]">
+            <span className="h-[2px] flex-1 bg-gradient-to-r from-transparent to-[#f2c65e]" />
+            <span className="text-3xl">✦</span>
+            <span className="h-[2px] flex-1 bg-gradient-to-l from-transparent to-[#f2c65e]" />
+          </div>
+        </header>
+
+        <section
+          aria-label="Recherche vocale"
+          className="ayascan-glass mx-auto mt-9 flex max-w-3xl flex-col items-center rounded-[2.5rem] border-2 border-[#f2c65e] px-5 py-6 text-center text-[#064a38] shadow-[0_18px_60px_rgba(0,0,0,0.22)] sm:mt-12 sm:px-10 sm:py-7"
+        >
+          <p className="text-xl font-semibold leading-relaxed sm:text-2xl">
+            <span className="text-[#07513c]">Touchez </span>
+            <span dir="rtl" className="font-serif text-[#b07c12]">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</span>
+            <span className="text-[#07513c]"> pour commencer</span>
+          </p>
+          <div className="mt-5 rounded-full p-2 ring-1 ring-[#e8bd50]/80">
+            <BasmalaButton onClick={startListening} listening={listening} />
+          </div>
+          <p className="mt-4 max-w-lg text-sm leading-relaxed text-[#315b4b]">
+            Récitez un passage du Coran naturellement. AyaScan recherche les versets correspondants.
+          </p>
+          <div aria-live="polite" className="mt-3 min-h-6 text-sm font-semibold text-[#9b711d]">
             {status}
           </div>
-
-          <div className="mt-4 flex justify-center gap-4">
-
-            {listening && (
-              <button
-                onClick={stopListening}
-                className="px-5 py-2 rounded-xl bg-red-700 hover:bg-red-600 transition-colors"
-              >
-                ■ Arrêter
-              </button>
-            )}
-
+          <div className="mt-4 flex w-full max-w-xl flex-wrap items-center justify-center gap-3 sm:gap-5">
             <button
               onClick={clearResults}
-              className="px-5 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 transition-colors"
+              className="flex min-w-48 items-center justify-center gap-3 rounded-full border-2 border-[#e8b83d] bg-white/55 px-6 py-3 text-base font-semibold text-[#07513c] shadow-md transition hover:bg-white/80"
             >
-              ✧ Effacer
+              <span aria-hidden="true" className="text-xl">▣</span>
+              Effacer
             </button>
-
+            {listening && (
+              <>
+                <span aria-hidden="true" className="hidden h-11 w-px bg-[#d9ad46] sm:block" />
+                <button
+                  onClick={stopListening}
+                  className="flex min-w-48 items-center justify-center gap-3 rounded-full border-2 border-[#07513c] bg-[#fffdf5]/75 px-6 py-3 text-base font-semibold text-[#07513c] shadow-md transition hover:bg-white"
+                >
+                  <span aria-hidden="true" className="text-xl">■</span>
+                  Arrêter
+                </button>
+              </>
+            )}
           </div>
-
-        </div>
+        </section>
 
         {transcript && (
-          <div className="mt-12 bg-slate-900/50 rounded-3xl p-6 text-center">
-
-            <h3 className="font-bold mb-3">
+          <section className="mx-auto mt-7 max-w-3xl rounded-2xl border border-[#e9c66b]/70 bg-[#064735]/85 p-5 text-center shadow-lg backdrop-blur-md">
+            <h2 className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-[#f4ce72]">
               Texte reconnu
-            </h3>
-
-            <p className="text-2xl">
-              {transcript}
-            </p>
-
-          </div>
+            </h2>
+            <p dir="rtl" className="text-2xl leading-loose text-white">{transcript}</p>
+          </section>
         )}
 
         {bestMatch && (
-          <div className="mt-12">
-
+          <div className="mx-auto mt-7 max-w-3xl">
             <BestMatchCard
-              surahName={
-                surahNames[
-                  bestMatch.verse
-                    .surahNumber as keyof typeof surahNames
-                ]
-              }
-              surahArabic={
-                bestMatch.verse.surahArabic
-              }
-              surahNumber={
-                bestMatch.verse.surahNumber
-              }
+              surahName={surahNames[bestMatch.verse.surahNumber as keyof typeof surahNames]}
+              surahArabic={bestMatch.verse.surahArabic}
+              surahNumber={bestMatch.verse.surahNumber}
               ayah={bestMatch.verse.ayah}
               arabic={bestMatch.verse.arabic}
+              translation={bestMatch.verse.translation}
               confidence={bestMatch.score}
+              occurrences={(bestMatch.occurrences ?? [])
+                .filter(
+                  (verse) =>
+                    verse.surahNumber !== bestMatch.verse.surahNumber ||
+                    verse.ayah !== bestMatch.verse.ayah
+                )
+                .map((verse) => ({
+                  surahNumber: verse.surahNumber,
+                  ayah: verse.ayah,
+                  surahName:
+                    surahNames[
+                      verse.surahNumber as keyof typeof surahNames
+                    ] ?? `Sourate ${verse.surahNumber}`,
+                }))}
               isFavorite={bestMatchIsFavorite}
               onToggleFavorite={() => toggleFavorite(bestMatch)}
             />
-
           </div>
         )}
 
         {results.length > 1 && (
-
-          <div className="mt-10">
-
-            <h2 className="text-2xl font-bold mb-6">
-              Autres résultats possibles
-            </h2>
-
-            <div className="grid gap-4">
-
-              {results
-                .slice(1)
-                .map((result, index) => (
-
-                  <div
-                    key={`${result.verse.surahNumber}-${result.verse.ayah}`}
-                    className="bg-slate-900/50 rounded-2xl p-5"
-                  >
-                    <p>
-                      #{index + 2}
-                    </p>
-
-                    <p>
-                      {
-                        surahNames[
-                          result.verse
-                            .surahNumber as keyof typeof surahNames
-                        ]
-                      }
-                    </p>
-
-                    <p>
-                      Verset {result.verse.ayah}
-                    </p>
-
-                    <p className="text-emerald-300">
-                      {result.score}%
+          <section className="mx-auto mt-7 max-w-3xl overflow-hidden rounded-[2rem] border-2 border-[#e9bd4f]/80 bg-gradient-to-br from-[#075b43]/95 to-[#033d30]/95 p-5 shadow-[0_16px_40px_rgba(0,0,0,0.24)] backdrop-blur-md sm:p-7">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-[#f4c85f]/25 pb-4">
+              <h2 className="flex items-center gap-2 text-lg font-bold text-[#f4d98b]">
+                <span aria-hidden="true" className="text-xl">✦</span>
+                Autres résultats possibles
+              </h2>
+              <span className="rounded-full border border-[#e9bd4f]/50 bg-[#f4c85f]/10 px-3 py-1 text-xs font-semibold text-[#f8dda0]">
+                {results.length - 1} autres correspondances
+              </span>
+            </div>
+            <div className="grid gap-3">
+              {results.slice(1).map((result, index) => (
+                <article
+                  key={`${result.verse.surahNumber}-${result.verse.ayah}`}
+                  className="rounded-2xl border border-[#e9c66b]/30 bg-[#022f25]/35 p-4 transition-colors hover:border-[#e9c66b]/60 hover:bg-[#022f25]/50 sm:p-5"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-white">
+                        <span className="mr-2 text-[#f4d98b]">#{index + 2}</span>
+                        {surahNames[result.verse.surahNumber as keyof typeof surahNames]}
+                      </p>
+                      <p className="mt-1 text-sm text-emerald-100/75">
+                        Sourate {result.verse.surahNumber} <span className="px-1 text-[#e9bd4f]">·</span> Verset {result.verse.ayah}
+                      </p>
+                    </div>
+                    <span className="rounded-full border border-[#f4c85f]/45 bg-[#f4c85f]/10 px-3 py-1.5 text-sm font-bold tabular-nums text-[#f8dda0]">
+                      {result.score}% de correspondance
+                    </span>
+                  </div>
+                  <div className="mt-4 rounded-xl border border-white/10 bg-black/10 px-4 py-3">
+                    <p dir="rtl" lang="ar" className="text-right font-serif text-xl leading-[2.1] text-[#fff9e8] sm:text-2xl">
+                      {result.verse.arabic}
                     </p>
                   </div>
-
-                ))}
-
+                </article>
+              ))}
             </div>
-
-          </div>
-
+          </section>
         )}
 
-        <FavoritesPanel
-          favorites={favorites}
-          onRemove={removeFavorite}
-        />
-<HistoryPanel
-  history={history}
-  onRemove={removeHistoryItem}
-  onClear={clearHistory}
-/>
-        <div className="mt-12 text-center text-slate-500 text-sm">
-          Corpus chargé : {quranVerses.length} versets
+        <div className="mt-9 grid gap-5 lg:grid-cols-2">
+          <FavoritesPanel favorites={favorites} onRemove={removeFavorite} />
+          <HistoryPanel history={history} onRemove={removeHistoryItem} onClear={clearHistory} />
         </div>
 
+        <footer className="mx-auto mt-10 max-w-2xl text-center font-serif">
+          <p className="text-xl italic leading-relaxed text-white drop-shadow sm:text-2xl">
+            « Nous t'avons certes fait descendre le Coran,<br className="hidden sm:block" /> pour que tu en fasses une lecture aux gens. »
+          </p>
+          <p className="mt-3 text-lg font-semibold text-[#f5c84f]">Sourate 17, Verset 105</p>
+          <div className="mx-auto mt-7 h-2 max-w-xl rounded-full border-y border-[#eac35b] bg-[#064735]/80" />
+        </footer>
       </div>
-
     </main>
   );
 }
