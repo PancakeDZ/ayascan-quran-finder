@@ -10,6 +10,11 @@ type Props = {
   arabic: string;
   translation?: string;
   confidence: number;
+  occurrences?: Array<{
+    surahNumber: number;
+    ayah: number;
+    surahName: string;
+  }>;
   isFavorite: boolean;
   onToggleFavorite: () => void;
 };
@@ -34,6 +39,7 @@ export default function BestMatchCard({
   arabic,
   translation: initialTranslation,
   confidence,
+  occurrences = [],
   isFavorite,
   onToggleFavorite,
 }: Props) {
@@ -138,6 +144,24 @@ export default function BestMatchCard({
           </div>
           <p dir="rtl" className="font-serif text-2xl text-[#f4d98b]">{surahArabic}</p>
         </div>
+
+        {occurrences.length > 0 && (
+          <div className="mt-5 rounded-xl border border-[#f4c85f]/35 bg-[#f4c85f]/[0.08] px-4 py-3">
+            <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#f4d98b]">
+              Même verset également présent dans
+            </p>
+            <ul className="mt-2 flex flex-wrap gap-2">
+              {occurrences.map((occurrence) => (
+                <li
+                  key={`${occurrence.surahNumber}-${occurrence.ayah}`}
+                  className="rounded-full border border-[#f4c85f]/35 bg-black/10 px-3 py-1.5 text-sm text-emerald-50"
+                >
+                  {occurrence.surahName} · {occurrence.surahNumber}:{occurrence.ayah}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <div className="mt-7 rounded-2xl border border-[#f4c85f]/25 bg-[#022f25]/35 px-5 py-6 sm:px-7 sm:py-8">
           <p dir="rtl" lang="ar" className="text-right font-serif text-3xl leading-[2.25] text-[#fff9e8] sm:text-4xl">
