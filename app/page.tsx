@@ -596,58 +596,47 @@ const saveBestResultToHistory = () => {
     : false;
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#062b24] text-[#f8f5e9]">
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 bg-cover bg-center"
-        style={{
-          backgroundImage:
-            "linear-gradient(180deg, rgba(3, 35, 29, 0.52) 0%, rgba(3, 35, 29, 0.72) 48%, rgba(3, 35, 29, 0.94) 100%), url('https://commons.wikimedia.org/wiki/Special:FilePath/Masjid_Kristal_(Kuala_Terengganu)_(10498676193).jpg')",
-        }}
-      />
-      <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-b from-emerald-950/10 via-transparent to-[#031b17]/60" />
-
-      <div className="relative z-10 mx-auto max-w-6xl px-5 py-7 sm:px-8 sm:py-10">
+    <main className="min-h-screen bg-[#f7f8f5] text-[#173d32]">
+      <div className="mx-auto max-w-6xl px-5 py-8 sm:px-8 sm:py-12">
         <header className="flex flex-col items-center text-center">
-          <div className="mb-5 flex items-center gap-3">
-            <span aria-hidden="true" className="text-4xl text-[#e3bd70]">۞</span>
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#0d5945] text-xl font-semibold text-[#e8d5a4] shadow-sm">
+              A
+            </div>
             <div className="text-left">
-              <h1 className="text-4xl font-semibold tracking-tight text-white sm:text-5xl">
-                Aya<span className="text-[#e3bd70]">Scan</span>
+              <h1 className="text-3xl font-semibold tracking-tight text-[#174b3b] sm:text-4xl">
+                AyaScan
               </h1>
-              <p className="mt-0.5 text-xs font-medium tracking-[0.24em] text-emerald-50/90 uppercase">
+              <p className="mt-0.5 text-[11px] font-semibold tracking-[0.22em] text-[#8a7448] uppercase">
                 Quran Finder
               </p>
             </div>
           </div>
-
-          <p className="mx-auto max-w-2xl text-lg font-medium leading-relaxed text-white drop-shadow sm:text-2xl">
-            Trouvez facilement les versets du Coran
-            <span className="block italic">par votre voix</span>
+          <p className="mt-7 max-w-xl text-base leading-relaxed text-[#52685f] sm:text-lg">
+            Retrouvez les versets du Coran à partir de votre récitation.
           </p>
-          <div className="mt-5 h-px w-44 bg-gradient-to-r from-transparent via-[#e3bd70] to-transparent" />
+          <div className="mt-5 h-px w-20 bg-[#c6a45e]" />
         </header>
 
         <section
           aria-label="Recherche vocale"
-          className="mx-auto mt-9 flex max-w-3xl flex-col items-center rounded-[2rem] border border-[#d8b66e] bg-[#fbf8ef]/95 px-5 py-7 text-center text-[#073b30] shadow-[0_24px_80px_rgba(0,0,0,0.28)] backdrop-blur-md sm:mt-12 sm:px-10 sm:py-9"
+          className="mx-auto mt-9 flex max-w-2xl flex-col items-center rounded-[1.75rem] border border-[#e6e5dc] bg-white px-6 py-8 text-center shadow-[0_12px_40px_rgba(23,61,50,0.07)] sm:mt-11 sm:px-10 sm:py-10"
         >
-          <p dir="rtl" className="text-2xl leading-relaxed text-[#8a672c] sm:text-3xl">
+          <p dir="rtl" className="text-2xl leading-relaxed text-[#96743a] sm:text-3xl">
             بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
           </p>
-          <div className="my-3 h-px w-48 bg-gradient-to-r from-transparent via-[#c49a4a] to-transparent" />
-          <p className="mb-5 text-base font-semibold sm:text-lg">
-            Touchez ﷽ pour commencer
+          <p className="mt-3 text-sm text-[#748078]">
+            Commencez votre récitation
           </p>
 
-          <div className="rounded-full p-2 ring-1 ring-[#d6b56d]/50">
+          <div className="mt-7">
             <BasmalaButton onClick={startListening} listening={listening} />
           </div>
 
-          <p className="mt-4 max-w-md text-sm text-[#31594d]">
+          <p className="mt-5 max-w-md text-sm leading-relaxed text-[#63756c]">
             Récitez un passage du Coran naturellement. AyaScan recherche les versets correspondants.
           </p>
-          <div aria-live="polite" className="mt-3 min-h-6 text-sm font-semibold text-[#8a672c]">
+          <div aria-live="polite" className="mt-4 min-h-6 text-sm font-medium text-[#8a7448]">
             {status}
           </div>
 
@@ -655,14 +644,14 @@ const saveBestResultToHistory = () => {
             {listening && (
               <button
                 onClick={stopListening}
-                className="rounded-full border border-red-300 bg-red-50 px-6 py-2.5 text-sm font-semibold text-red-800 transition-colors hover:bg-red-100"
+                className="rounded-full border border-[#e7caca] bg-[#fff7f6] px-5 py-2.5 text-sm font-semibold text-[#9b4545] transition-colors hover:bg-[#fceeed]"
               >
-                ■ Arrêter
+                Arrêter
               </button>
             )}
             <button
               onClick={clearResults}
-              className="rounded-full border border-[#b99a5b] bg-white/70 px-6 py-2.5 text-sm font-semibold text-[#174b3d] transition-colors hover:bg-white"
+              className="rounded-full border border-[#d9e2dc] bg-white px-5 py-2.5 text-sm font-semibold text-[#426052] transition-colors hover:bg-[#f4f7f4]"
             >
               Effacer
             </button>
@@ -670,18 +659,18 @@ const saveBestResultToHistory = () => {
         </section>
 
         {transcript && (
-          <section className="mx-auto mt-8 max-w-3xl rounded-2xl border border-white/20 bg-[#062b24]/80 p-5 text-center shadow-lg backdrop-blur-md">
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-[#e3bd70]">
+          <section className="mx-auto mt-7 max-w-3xl rounded-2xl border border-[#e5e8e2] bg-white p-5 text-center shadow-sm sm:p-6">
+            <h2 className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-[#987b43]">
               Texte reconnu
             </h2>
-            <p dir="rtl" className="text-2xl leading-loose text-white">
+            <p dir="rtl" className="text-2xl leading-loose text-[#244c3d]">
               {transcript}
             </p>
           </section>
         )}
 
         {bestMatch && (
-          <div className="mx-auto mt-8 max-w-3xl">
+          <div className="mx-auto mt-7 max-w-3xl">
             <BestMatchCard
               surahName={
                 surahNames[
@@ -700,26 +689,26 @@ const saveBestResultToHistory = () => {
         )}
 
         {results.length > 1 && (
-          <section className="mx-auto mt-8 max-w-3xl rounded-2xl border border-white/15 bg-[#062b24]/85 p-5 shadow-lg backdrop-blur-md">
-            <h2 className="mb-5 text-xl font-bold text-[#f0d28f]">
+          <section className="mx-auto mt-7 max-w-3xl rounded-2xl border border-[#e5e8e2] bg-white p-5 shadow-sm sm:p-6">
+            <h2 className="mb-4 text-lg font-semibold text-[#245541]">
               Autres résultats possibles
             </h2>
             <div className="grid gap-3">
               {results.slice(1).map((result, index) => (
                 <div
                   key={`${result.verse.surahNumber}-${result.verse.ayah}`}
-                  className="rounded-xl border border-white/10 bg-white/5 p-4"
+                  className="rounded-xl border border-[#edf0eb] bg-[#fafbf9] p-4"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="font-semibold">
+                    <p className="font-semibold text-[#315647]">
                       #{index + 2} · {surahNames[result.verse.surahNumber as keyof typeof surahNames]}
                     </p>
-                    <span className="text-sm text-[#e3bd70]">{result.score}%</span>
+                    <span className="text-sm font-semibold text-[#987b43]">{result.score}%</span>
                   </div>
-                  <p className="mt-1 text-sm text-emerald-100/80">
+                  <p className="mt-1 text-sm text-[#77857d]">
                     Verset {result.verse.ayah}
                   </p>
-                  <p dir="rtl" className="mt-3 text-xl leading-loose text-white">
+                  <p dir="rtl" className="mt-3 text-xl leading-loose text-[#244c3d]">
                     {result.verse.arabic}
                   </p>
                 </div>
@@ -728,7 +717,7 @@ const saveBestResultToHistory = () => {
           </section>
         )}
 
-        <div className="mt-10 grid gap-5 lg:grid-cols-2">
+        <div className="mt-9 grid gap-5 lg:grid-cols-2">
           <FavoritesPanel favorites={favorites} onRemove={removeFavorite} />
           <HistoryPanel
             history={history}
@@ -737,22 +726,12 @@ const saveBestResultToHistory = () => {
           />
         </div>
 
-        <footer className="mt-10 text-center text-xs text-emerald-50/75">
-          <p className="text-sm italic text-white/90">
+        <footer className="mt-12 border-t border-[#e4e8e1] pt-6 text-center text-xs text-[#7c8981]">
+          <p className="text-sm italic text-[#52685f]">
             « Nous t'avons certes fait descendre le Coran, pour que tu en fasses une lecture aux gens. »
           </p>
-          <p className="mt-2 text-[#e3bd70]">Sourate 17, verset 105</p>
-          <p className="mt-5">
-            Photographie : V. Epiney ·{" "}
-            <a
-              href="https://commons.wikimedia.org/wiki/File:Masjid_Kristal_(Kuala_Terengganu)_(10498676193).jpg"
-              target="_blank"
-              rel="noreferrer"
-              className="underline underline-offset-2 hover:text-white"
-            >
-              Wikimedia Commons, licence CC BY-SA 2.0
-            </a>
-          </p>
+          <p className="mt-2 font-medium text-[#987b43]">Sourate 17, verset 105</p>
+          <p className="mt-4">AyaScan · Recherche coranique par la voix</p>
         </footer>
       </div>
     </main>
