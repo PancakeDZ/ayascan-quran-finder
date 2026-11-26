@@ -391,6 +391,23 @@ const saveBestResultToHistory = () => {
 
     const matches: SearchResult[] = [];
 
+    // Cache temporaire : un même couple de mots peut apparaître
+    // dans de nombreux versets au cours d'une seule recherche.
+    const similarityCache = new Map<string, number>();
+
+    const getCachedSimilarity = (first: string, second: string) => {
+      const key = first + "\u0000" + second;
+      const cached = similarityCache.get(key);
+
+      if (cached !== undefined) {
+        return cached;
+      }
+
+      const similarity = wordSimilarity(first, second);
+      similarityCache.set(key, similarity);
+      return similarity;
+    };
+
     for (let index = 0; index < quranVerses.length; index++) {
       const verse = quranVerses[index];
       const verseTokens = normalizedVerseTokens[index];
@@ -424,9 +441,18 @@ const saveBestResultToHistory = () => {
             continue;
           }
 
-          const similarity = wordSimilarity(
+          const candidateWord = verseTokens[wordIndex];
+
+          // Une correspondance exacte est déjà le meilleur score possible.
+          if (inputWord === candidateWord) {
+            bestSimilarity = 1;
+            bestIndex = wordIndex;
+            break;
+          }
+
+          const similarity = getCachedSimilarity(
             inputWord,
-            verseTokens[wordIndex]
+            candidateWord
           );
 
           if (similarity > bestSimilarity) {
