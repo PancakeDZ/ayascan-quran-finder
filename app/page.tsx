@@ -702,18 +702,42 @@ const saveBestResultToHistory = () => {
         )}
 
         {results.length > 1 && (
-          <section className="mx-auto mt-7 max-w-3xl rounded-2xl border border-[#e9c66b]/50 bg-[#064735]/90 p-5 shadow-lg backdrop-blur-md sm:p-6">
-            <h2 className="mb-4 text-lg font-semibold text-[#f4ce72]">Autres résultats possibles</h2>
+          <section className="mx-auto mt-7 max-w-3xl overflow-hidden rounded-[2rem] border-2 border-[#e9bd4f]/80 bg-gradient-to-br from-[#075b43]/95 to-[#033d30]/95 p-5 shadow-[0_16px_40px_rgba(0,0,0,0.24)] backdrop-blur-md sm:p-7">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-[#f4c85f]/25 pb-4">
+              <h2 className="flex items-center gap-2 text-lg font-bold text-[#f4d98b]">
+                <span aria-hidden="true" className="text-xl">✦</span>
+                Autres résultats possibles
+              </h2>
+              <span className="rounded-full border border-[#e9bd4f]/50 bg-[#f4c85f]/10 px-3 py-1 text-xs font-semibold text-[#f8dda0]">
+                {results.length - 1} autres correspondances
+              </span>
+            </div>
             <div className="grid gap-3">
               {results.slice(1).map((result, index) => (
-                <div key={`${result.verse.surahNumber}-${result.verse.ayah}`} className="rounded-xl border border-white/15 bg-white/5 p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="font-semibold text-white">#{index + 2} · {surahNames[result.verse.surahNumber as keyof typeof surahNames]}</p>
-                    <span className="text-sm text-[#f4ce72]">{result.score}%</span>
+                <article
+                  key={`${result.verse.surahNumber}-${result.verse.ayah}`}
+                  className="rounded-2xl border border-[#e9c66b]/30 bg-[#022f25]/35 p-4 transition-colors hover:border-[#e9c66b]/60 hover:bg-[#022f25]/50 sm:p-5"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-white">
+                        <span className="mr-2 text-[#f4d98b]">#{index + 2}</span>
+                        {surahNames[result.verse.surahNumber as keyof typeof surahNames]}
+                      </p>
+                      <p className="mt-1 text-sm text-emerald-100/75">
+                        Sourate {result.verse.surahNumber} <span className="px-1 text-[#e9bd4f]">·</span> Verset {result.verse.ayah}
+                      </p>
+                    </div>
+                    <span className="rounded-full border border-[#f4c85f]/45 bg-[#f4c85f]/10 px-3 py-1.5 text-sm font-bold tabular-nums text-[#f8dda0]">
+                      {result.score}% de correspondance
+                    </span>
                   </div>
-                  <p className="mt-1 text-sm text-emerald-100/80">Verset {result.verse.ayah}</p>
-                  <p dir="rtl" className="mt-3 text-xl leading-loose text-white">{result.verse.arabic}</p>
-                </div>
+                  <div className="mt-4 rounded-xl border border-white/10 bg-black/10 px-4 py-3">
+                    <p dir="rtl" lang="ar" className="text-right font-serif text-xl leading-[2.1] text-[#fff9e8] sm:text-2xl">
+                      {result.verse.arabic}
+                    </p>
+                  </div>
+                </article>
               ))}
             </div>
           </section>
