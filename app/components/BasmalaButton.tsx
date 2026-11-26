@@ -12,27 +12,18 @@ export default function BasmalaButton({
       onClick={onClick}
       className={`
         relative
-        w-44
-        h-44
-        rounded-full
-        border-2
-        border-amber-400
-        bg-gradient-to-br
-        from-emerald-900
-        via-emerald-950
-        to-slate-950
-        text-6xl
-        flex
-        items-center
-        justify-center
-        transition-all
-        duration-300
-        hover:scale-105
-        shadow-[0_0_35px_rgba(16,185,129,0.5)]
-        ${listening ? "animate-pulse" : ""}
+        flex h-44 w-44 items-center justify-center
+        rounded-full border border-amber-200/80
+        bg-gradient-to-br from-emerald-700 via-emerald-950 to-[#03110f]
+        text-6xl text-amber-200
+        shadow-[0_0_0_7px_rgba(214,173,85,0.07),0_0_55px_rgba(16,185,129,0.28)]
+        transition-all duration-300
+        hover:scale-[1.04] hover:border-amber-100
+        focus-visible:outline-2 focus-visible:outline-offset-8 focus-visible:outline-amber-300
+        ${listening ? "animate-pulse shadow-[0_0_0_10px_rgba(214,173,85,0.12),0_0_65px_rgba(16,185,129,0.45)]" : ""}
       `}
     >
-      <span className="text-amber-300">
+      <span aria-hidden="true" className="text-amber-200 drop-shadow-[0_2px_12px_rgba(242,213,138,0.25)]">
         ﷽
       </span>
     </button>
