@@ -596,61 +596,55 @@ const saveBestResultToHistory = () => {
     : false;
 
   return (
-    <main className="min-h-screen bg-linear-to-br from-slate-950 via-emerald-950 to-slate-900 text-white">
+    <main className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-emerald-900 via-[#061b17] to-[#03110f] text-[#f8f5e9]">
+      <div className="mx-auto max-w-6xl px-5 py-8 sm:px-8 sm:py-12">
+        <header className="text-center">
+          <div className="mx-auto mb-5 inline-flex items-center gap-2 rounded-full border border-amber-300/25 bg-emerald-950/60 px-4 py-2 text-xs font-medium tracking-[0.2em] text-amber-200 uppercase">
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-300" />
+            Recherche coranique intelligente
+          </div>
 
-      <div className="max-w-6xl mx-auto px-6 py-12">
-
-        <div className="text-center">
-
-          <h1 className="text-6xl text-amber-300 mb-4">
-            ﷽
+          <h1 className="text-5xl font-semibold tracking-tight text-[#f8f5e9] sm:text-6xl">
+            Aya<span className="text-amber-300">Scan</span>
           </h1>
-
-          <h2 className="text-5xl font-bold">
-            AyaScan
-          </h2>
-
-          <p className="mt-2 text-slate-300">
+          <p className="mt-3 text-sm font-medium tracking-[0.25em] text-emerald-200/80 uppercase">
             Quran Finder
           </p>
-
-          <p className="mt-6 text-slate-400">
-            Retrouvez instantanément une
-            sourate à partir d&apos;une récitation.
+          <p className="mx-auto mt-6 max-w-xl text-base leading-7 text-emerald-50/75 sm:text-lg">
+            Retrouvez les versets du Saint Coran à partir de votre récitation.
           </p>
 
-          <div className="mt-10 flex justify-center">
+          <div className="mx-auto mt-10 flex max-w-md flex-col items-center rounded-[2rem] border border-amber-200/15 bg-emerald-950/35 px-6 py-8 shadow-[0_20px_80px_rgba(0,0,0,0.25)] backdrop-blur-sm sm:py-10">
             <BasmalaButton
               onClick={startListening}
               listening={listening}
             />
-          </div>
+            <p className="mt-5 text-sm text-emerald-100/75">
+              Touchez pour commencer votre récitation
+            </p>
+            <div aria-live="polite" className="mt-4 min-h-6 text-sm font-medium text-amber-200">
+              {status}
+            </div>
 
-          <div className="mt-6 text-emerald-300">
-            {status}
-          </div>
+            <div className="mt-5 flex flex-wrap justify-center gap-3">
+              {listening && (
+                <button
+                  onClick={stopListening}
+                  className="rounded-xl border border-red-300/30 bg-red-950/70 px-5 py-2.5 text-sm font-medium text-red-100 transition-colors hover:bg-red-900"
+                >
+                  ■ Arrêter
+                </button>
+              )}
 
-          <div className="mt-4 flex justify-center gap-4">
-
-            {listening && (
               <button
-                onClick={stopListening}
-                className="px-5 py-2 rounded-xl bg-red-700 hover:bg-red-600 transition-colors"
+                onClick={clearResults}
+                className="rounded-xl border border-emerald-100/15 bg-emerald-900/70 px-5 py-2.5 text-sm font-medium text-emerald-50 transition-colors hover:bg-emerald-800"
               >
-                ■ Arrêter
+                ✧ Effacer
               </button>
-            )}
-
-            <button
-              onClick={clearResults}
-              className="px-5 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 transition-colors"
-            >
-              ✧ Effacer
-            </button>
-
+            </div>
           </div>
-
-        </div>
+        </header>
 
         {transcript && (
           <div className="mt-12 bg-slate-900/50 rounded-3xl p-6 text-center">
