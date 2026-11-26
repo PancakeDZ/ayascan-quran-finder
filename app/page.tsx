@@ -170,7 +170,11 @@ export default function Home() {
 const [historyLoaded, setHistoryLoaded] = useState(false);
 
   const recognitionRef = useRef<RecognitionType | null>(null);
-const latestBestResultRef = useRef<SearchResult | null>(null);
+  const latestBestResultRef = useRef<SearchResult | null>(null);
+  const shouldContinueListeningRef = useRef(false);
+  const sessionBaseTranscriptRef = useRef("");
+  const transcriptRef = useRef("");
+  const restartTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
  
   // Charger les favoris enregistrés dans le navigateur
   useEffect(() => {
@@ -377,7 +381,6 @@ const saveBestResultToHistory = () => {
     const normalizedInput = normalizeArabic(text);
 
     if (!normalizedInput) {
-      setResults([]);
       return;
     }
 
@@ -518,47 +521,32 @@ const saveBestResultToHistory = () => {
       .sort((a, b) => b.score - a.score)
       .slice(0, 5);
 
-    setResults(rankedResults);
+    // Garder le meilleur résultat obtenu pendant toute la récitation.
+    // Une transcription provisoire moins bonne ne doit pas effacer une
+    // correspondance déjà trouvée.
+    if (rankedResults.length > 0) {
+      setResults((current) => {
+        if (current[0] && current[0].score > rankedResults[0].score) {
+          return current;
+        }
 
-    // Conserver uniquement le meilleur résultat
-    // pour l'enregistrer à la fin de l'écoute
-    latestBestResultRef.current = rankedResults[0] ?? null;
-  };
+        return rankedResults;
+      });
 
-  // Effacer les résultats
-  const clearResults = () => {
-    if (recognitionRef.current) {
-      const recognition = recognitionRef.current;
-      recognitionRef.current = null;
+      const newBest = rankedResults[0];
+      const previousBest = latestBestResultRef.current;
 
-      recognition.stop();
+      if (!previousBest || newBest.score >= previousBest.score) {
+        latestBestResultRef.current = newBest;
+      }
     }
-
-       latestBestResultRef.current = null;
-    setListening(false);
-    setTranscript("");
-    setResults([]);
-    setStatus("En attente de votre récitation.");
   };
 
-  // Arrêter la reconnaissance vocale
-  const stopListening = () => {
-    const recognition = recognitionRef.current;
-
-    saveBestResultToHistory();
-
-    if (recognition) {
-      recognitionRef.current = null;
-      recognition.stop();
-    }
-
-    setListening(false);
-    setStatus("⏹️ Récitation arrêtée.");
-  };
-
-  // Démarrer la reconnaissance vocale
-  const startListening = () => {
-    if (recognitionRef.current) {
+  // Créer une session de reconnaissance vocale.
+  // Le navigateur peut terminer une session après une pause : on la relance
+  // automatiquement en conservant le texte et les résultats déjà obtenus.
+  const startRecognitionSession = () => {
+    if (!shouldContinueListeningRef.current || recognitionRef.current) {
       return;
     }
 
@@ -572,50 +560,56 @@ const saveBestResultToHistory = () => {
       speechWindow.webkitSpeechRecognition;
 
     if (!SpeechRecognitionConstructor) {
+      shouldContinueListeningRef.current = false;
+      setListening(false);
       setStatus("❌ Reconnaissance vocale non supportée.");
       return;
     }
 
     const recognition = new SpeechRecognitionConstructor();
-
     recognitionRef.current = recognition;
 
     recognition.lang = "ar-SA";
     recognition.continuous = true;
-    recognition.interimResults = false;
-
-    latestBestResultRef.current = null;
+    // Les résultats intermédiaires permettent de chercher dès quelques mots.
+    recognition.interimResults = true;
 
     recognition.onresult = (event) => {
       if (recognitionRef.current !== recognition) {
         return;
       }
 
-      const recognizedText = Array.from(
+      const sessionText = Array.from(
         { length: event.results.length },
         (_, index) => event.results[index][0].transcript
       )
         .join(" ")
         .trim();
 
+      const recognizedText = [
+        sessionBaseTranscriptRef.current,
+        sessionText,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      if (!recognizedText) {
+        return;
+      }
+
+      transcriptRef.current = recognizedText;
       setTranscript(recognizedText);
       findVerse(recognizedText);
 
-      setStatus(
-        "🎙️ Récitation reconnue. Écoute en cours..."
-      );
+      setStatus("🎙️ Récitation reconnue. Écoute en cours...");
     };
 
     recognition.onerror = (event) => {
       if (recognitionRef.current !== recognition) {
         return;
       }
-
-      // Conserver le meilleur verset déjà trouvé, même si le micro
-      // rencontre ensuite une erreur ou si le navigateur interrompt l'écoute.
-      saveBestResultToHistory();
-      recognitionRef.current = null;
-      setListening(false);
 
       const errorMessages: Record<string, string> = {
         "not-allowed":
@@ -625,7 +619,7 @@ const saveBestResultToHistory = () => {
         "audio-capture":
           "❌ Aucun microphone utilisable n'a été détecté.",
         "no-speech":
-          "Aucune voix détectée. Vous pouvez réessayer en parlant un peu plus près du microphone.",
+          "Pause détectée. AyaScan conserve votre récitation et reprend l'écoute...",
         network:
           "❌ Problème de connexion au service vocal. Vérifiez votre connexion puis réessayez.",
         "language-not-supported":
@@ -634,6 +628,18 @@ const saveBestResultToHistory = () => {
           "Écoute interrompue. Vous pouvez reprendre votre récitation.",
       };
 
+      // Une absence temporaire de voix est normale pendant une récitation.
+      // On laisse onend relancer le micro sans perdre le texte déjà reconnu.
+      if (event.error === "no-speech") {
+        setStatus(errorMessages[event.error]);
+        return;
+      }
+
+      shouldContinueListeningRef.current = false;
+      recognitionRef.current = null;
+      saveBestResultToHistory();
+      setListening(false);
+
       setStatus(
         errorMessages[event.error] ??
           "❌ La reconnaissance vocale a rencontré un problème. Vous pouvez réessayer."
@@ -641,28 +647,109 @@ const saveBestResultToHistory = () => {
     };
 
     recognition.onend = () => {
-      if (recognitionRef.current === recognition) {
-        saveBestResultToHistory();
-
-        recognitionRef.current = null;
-        setListening(false);
-        setStatus("⏹️ Écoute terminée.");
+      if (recognitionRef.current !== recognition) {
+        return;
       }
+
+      recognitionRef.current = null;
+
+      if (shouldContinueListeningRef.current) {
+        // Mémoriser le texte de cette session avant de relancer le navigateur.
+        sessionBaseTranscriptRef.current = transcriptRef.current;
+        setStatus("Reprise de l'écoute...");
+
+        if (restartTimeoutRef.current) {
+          clearTimeout(restartTimeoutRef.current);
+        }
+
+        restartTimeoutRef.current = setTimeout(() => {
+          restartTimeoutRef.current = null;
+          startRecognitionSession();
+        }, 350);
+
+        return;
+      }
+
+      saveBestResultToHistory();
+      setListening(false);
+      setStatus("⏹️ Écoute terminée.");
     };
+
+    try {
+      recognition.start();
+    } catch {
+      recognitionRef.current = null;
+      shouldContinueListeningRef.current = false;
+      saveBestResultToHistory();
+      setListening(false);
+      setStatus("❌ Impossible de démarrer le microphone.");
+    }
+  };
+
+  // Effacer les résultats et interrompre aussi toute reprise automatique.
+  const clearResults = () => {
+    shouldContinueListeningRef.current = false;
+
+    if (restartTimeoutRef.current) {
+      clearTimeout(restartTimeoutRef.current);
+      restartTimeoutRef.current = null;
+    }
+
+    const recognition = recognitionRef.current;
+    recognitionRef.current = null;
+
+    if (recognition) {
+      recognition.stop();
+    }
+
+    latestBestResultRef.current = null;
+    transcriptRef.current = "";
+    sessionBaseTranscriptRef.current = "";
+    setListening(false);
+    setTranscript("");
+    setResults([]);
+    setStatus("En attente de votre récitation.");
+  };
+
+  // Arrêter l'écoute sans effacer le texte ni les résultats.
+  const stopListening = () => {
+    shouldContinueListeningRef.current = false;
+
+    if (restartTimeoutRef.current) {
+      clearTimeout(restartTimeoutRef.current);
+      restartTimeoutRef.current = null;
+    }
+
+    saveBestResultToHistory();
+
+    const recognition = recognitionRef.current;
+    recognitionRef.current = null;
+
+    if (recognition) {
+      recognition.stop();
+    }
+
+    setListening(false);
+    setStatus("⏹️ Récitation arrêtée.");
+  };
+
+  // Démarrer une nouvelle récitation.
+  const startListening = () => {
+    if (recognitionRef.current || shouldContinueListeningRef.current) {
+      return;
+    }
+
+    shouldContinueListeningRef.current = true;
+    transcriptRef.current = "";
+    sessionBaseTranscriptRef.current = "";
+    latestBestResultRef.current = null;
 
     setListening(true);
     setStatus("🔊 Écoute en cours...");
     setResults([]);
     setTranscript("");
 
-    try {
-      recognition.start();
-    } catch {
-      recognitionRef.current = null;
-      latestBestResultRef.current = null;
-      setListening(false);
-      setStatus("❌ Impossible de démarrer le microphone.");
-    }
+    startRecognitionSession();
   };
  const bestMatch = results[0];
 
