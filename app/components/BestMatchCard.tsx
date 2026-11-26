@@ -4,34 +4,87 @@ type Props = {
   surahNumber: number;
   ayah: number;
   arabic: string;
+  translation: string;
   confidence: number;
   isFavorite: boolean;
   onToggleFavorite: () => void;
 };
 
-export default function BestMatchCard({ surahName, surahArabic, surahNumber, ayah, arabic, confidence, isFavorite, onToggleFavorite }: Props) {
+export default function BestMatchCard({
+  surahName,
+  surahArabic,
+  surahNumber,
+  ayah,
+  arabic,
+  translation,
+  confidence,
+  isFavorite,
+  onToggleFavorite,
+}: Props) {
   const copyVerse = async () => {
-    const text = `Sourate ${surahNumber} - ${surahName}\n\n${arabic}\n\nAyaScan Quran Finder`;
-    try { await navigator.clipboard.writeText(text); alert("Verset copié !"); }
-    catch { alert("Impossible de copier le verset."); }
+    const text = \`Sourate \${surahNumber} - \${surahName}
+Verset \${ayah}
+
+\${arabic}
+
+\${translation}
+
+AyaScan Quran Finder\`;
+    try {
+      await navigator.clipboard.writeText(text);
+      alert("Verset copié !");
+    } catch {
+      alert("Impossible de copier le verset.");
+    }
   };
 
   return (
-    <section className="rounded-3xl border border-[#e9c66b]/70 bg-[#064735]/90 p-6 text-white shadow-xl backdrop-blur-md sm:p-8">
-      <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-[#f4ce72]">✦ Meilleure correspondance</p>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-bold sm:text-3xl">{surahName}</h2>
-          <p className="mt-1 text-sm text-emerald-100/80">Sourate {surahNumber} · Verset {ayah}</p>
+    <section className="overflow-hidden rounded-[2rem] border-2 border-[#e9bd4f] bg-gradient-to-br from-[#08734f]/95 to-[#03422f]/95 text-white shadow-[0_18px_45px_rgba(0,0,0,0.28)] backdrop-blur-md">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#f4c85f]/25 bg-[#022f25]/25 px-6 py-4 sm:px-8">
+        <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-[#f4d98b]">
+          <span aria-hidden="true" className="text-lg">✦</span>
+          Meilleure correspondance
+        </p>
+        <span className="rounded-full border border-[#f4c85f]/60 bg-[#f4c85f]/10 px-3 py-1.5 text-sm font-bold tabular-nums text-[#f8dda0]">
+          {confidence}% de correspondance
+        </span>
+      </div>
+
+      <div className="p-6 sm:p-8">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">{surahName}</h2>
+            <p className="mt-2 text-sm font-medium text-emerald-100/80">
+              Sourate {surahNumber} <span className="px-1 text-[#e9bd4f]">·</span> Verset {ayah}
+            </p>
+          </div>
+          <p dir="rtl" className="font-serif text-2xl text-[#f4d98b]">{surahArabic}</p>
         </div>
-        <span className="rounded-full border border-[#e9c66b]/60 bg-[#e9c66b]/10 px-3 py-1.5 text-sm font-semibold text-[#f4ce72]">{confidence}%</span>
+
+        <div className="mt-7 rounded-2xl border border-[#f4c85f]/25 bg-[#022f25]/35 px-5 py-6 sm:px-7 sm:py-8">
+          <p dir="rtl" lang="ar" className="text-right font-serif text-3xl leading-[2.25] text-[#fff9e8] sm:text-4xl">
+            {arabic}
+          </p>
+        </div>
+
+        {translation && (
+          <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.06] px-5 py-4">
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-[#f4d98b]">
+              Traduction française
+            </p>
+            <p className="text-base leading-relaxed text-emerald-50 sm:text-lg">{translation}</p>
+          </div>
+        )}
+
+        <div className="mt-6 flex flex-wrap gap-3">
+          <button type="button" onClick={copyVerse} className="rounded-full bg-[#e8bd50] px-5 py-2.5 text-sm font-bold text-[#064735] shadow-sm transition hover:bg-[#f5d77f] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4d98b]">
+            Copier le verset
+          </button>
+          <button type="button" onClick={onToggleFavorite} className="rounded-full border border-[#e9c66b]/70 px-5 py-2.5 text-sm font-semibold text-[#fff5d6] transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4d98b]">
+            {isFavorite ? "★ Retirer des favoris" : "☆ Ajouter aux favoris"}
+          </button>
+        </div>
       </div>
-      <p dir="rtl" className="mt-7 text-3xl leading-[2.2] text-[#fff8df] sm:text-4xl">{arabic}</p>
-      <div className="mt-6 flex flex-wrap gap-3">
-        <button type="button" onClick={copyVerse} className="rounded-full bg-[#e8bd50] px-5 py-2.5 text-sm font-semibold text-[#064735] transition hover:bg-[#f5d77f]">Copier</button>
-        <button type="button" onClick={onToggleFavorite} className="rounded-full border border-[#e9c66b]/70 px-5 py-2.5 text-sm font-semibold text-[#fff5d6] transition hover:bg-white/10">{isFavorite ? "★ Retirer des favoris" : "☆ Ajouter aux favoris"}</button>
-      </div>
-      <p dir="rtl" className="mt-6 text-xl text-[#f4ce72]">{surahArabic}</p>
     </section>
   );
 }
