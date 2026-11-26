@@ -102,16 +102,16 @@ function wordSimilarity(first: string, second: string): number {
 
       // Certaines lettres peuvent être confondues
       // par la reconnaissance vocale
-      if (
-        (a[i - 1] === "ق" && b[j - 1] === "ك") ||
-        (a[i - 1] === "ك" && b[j - 1] === "ق")
-      ) {
-        substitutionCost = 0.45;
-      }
+      // Variantes phonétiques fréquentes dans les transcriptions vocales.
+      // Le coût reste non nul pour éviter de confondre systématiquement les lettres.
+      const letterPair = a[i - 1] + b[j - 1];
 
-      if (
-        (a[i - 1] === "ت" && b[j - 1] === "ث") ||
-        (a[i - 1] === "ث" && b[j - 1] === "ت")
+      if (["قك", "كق"].includes(letterPair)) {
+        substitutionCost = 0.45;
+      } else if (
+        ["تث", "ثت", "ذز", "زذ", "ظض", "ضظ", "سص", "صس"].includes(
+          letterPair
+        )
       ) {
         substitutionCost = 0.5;
       }
