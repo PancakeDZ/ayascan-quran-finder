@@ -29,6 +29,7 @@ type Verse = {
 type SearchResult = {
   verse: Verse;
   score: number;
+  occurrences?: Verse[];
 };
 
 type RecognitionEvent = {
@@ -488,7 +489,34 @@ const saveBestResultToHistory = () => {
 
       matches.sort((a, b) => b.score - a.score);
 
-    const rankedResults = matches.slice(0, 5);
+    // Regrouper les versets dont le texte complet est identique
+    // après normalisation, tout en conservant toutes leurs références.
+    const groupedMatches = new Map<string, SearchResult>();
+
+    for (const match of matches) {
+      const verseKey = normalizeArabic(match.verse.arabic);
+      const existingMatch = groupedMatches.get(verseKey);
+
+      if (existingMatch) {
+        existingMatch.occurrences = [
+          ...(existingMatch.occurrences ?? [existingMatch.verse]),
+          match.verse,
+        ];
+        existingMatch.score = Math.max(
+          existingMatch.score,
+          match.score
+        );
+      } else {
+        groupedMatches.set(verseKey, {
+          ...match,
+          occurrences: [match.verse],
+        });
+      }
+    }
+
+    const rankedResults = [...groupedMatches.values()]
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5);
 
     setResults(rankedResults);
 
@@ -746,6 +774,20 @@ const saveBestResultToHistory = () => {
               arabic={bestMatch.verse.arabic}
               translation={bestMatch.verse.translation}
               confidence={bestMatch.score}
+              occurrences={(bestMatch.occurrences ?? [])
+                .filter(
+                  (verse) =>
+                    verse.surahNumber !== bestMatch.verse.surahNumber ||
+                    verse.ayah !== bestMatch.verse.ayah
+                )
+                .map((verse) => ({
+                  surahNumber: verse.surahNumber,
+                  ayah: verse.ayah,
+                  surahName:
+                    surahNames[
+                      verse.surahNumber as keyof typeof surahNames
+                    ] ?? `Sourate ${verse.surahNumber}`,
+                }))}
               isFavorite={bestMatchIsFavorite}
               onToggleFavorite={() => toggleFavorite(bestMatch)}
             />
