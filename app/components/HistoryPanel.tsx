@@ -1,4 +1,3 @@
-
 "use client";
 
 export type HistoryItem = {
@@ -22,25 +21,23 @@ export default function HistoryPanel({
   onClear,
 }: Props) {
   return (
-    <section className="mt-10 rounded-3xl border border-slate-700 bg-slate-900/50 p-6">
-      <div className="mb-5 flex items-center justify-between gap-3">
-        <h3 className="text-xl font-bold text-amber-300">
-          ☾ Historique des recherches
+    <section className="rounded-2xl border border-[#e4e8e1] bg-white p-5 shadow-sm sm:p-6">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h3 className="text-lg font-semibold text-[#245541]">
+          Historique des recherches
         </h3>
-
         {history.length > 0 && (
           <button
             type="button"
             onClick={onClear}
-            className="rounded-xl border border-red-500/40 px-3 py-2 text-sm text-red-300 hover:bg-red-500/10"
+            className="text-sm font-medium text-[#9b5550] hover:underline"
           >
             Tout effacer
           </button>
         )}
       </div>
-
       {history.length === 0 ? (
-        <p className="text-center text-slate-400">
+        <p className="text-sm text-[#78877e]">
           Aucune recherche pour le moment.
         </p>
       ) : (
@@ -48,32 +45,28 @@ export default function HistoryPanel({
           {history.map((item) => (
             <div
               key={item.id}
-              className="rounded-xl bg-slate-800 p-4"
+              className="rounded-xl border border-[#edf0eb] bg-[#fafbf9] p-4"
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-semibold text-white">
-                    Sourate {item.surahNumber} - {item.surahName}
+                  <p className="font-semibold text-[#315647]">
+                    Sourate {item.surahNumber} · {item.surahName}
                   </p>
-
-                  <p className="mt-1 text-sm text-slate-300">
+                  <p className="mt-1 text-xs text-[#849087]">
                     Verset {item.ayah}
                   </p>
-
-                  <p className="mt-3 text-xl text-white" dir="rtl">
+                  <p dir="rtl" className="mt-3 text-xl leading-loose text-[#244c3d]">
                     {item.arabic}
                   </p>
-
-                  <p className="mt-2 text-xs text-slate-400">
+                  <p className="mt-2 text-xs text-[#929b95]">
                     {new Date(item.searchedAt).toLocaleString("fr-FR")}
                   </p>
                 </div>
-
                 <button
                   type="button"
                   onClick={() => onRemove(item.id)}
                   aria-label="Supprimer cette recherche"
-                  className="rounded-lg px-3 py-2 text-sm text-red-300 hover:bg-red-500/10"
+                  className="text-sm font-medium text-[#9b5550] hover:underline"
                 >
                   Supprimer
                 </button>
