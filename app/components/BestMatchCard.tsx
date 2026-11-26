@@ -14,16 +14,16 @@ type Props = {
   onToggleFavorite: () => void;
 };
 
-type QuranEncAya = {
+type QuranEncResponse = {
   translation?: string;
-  result?: {
-    translation?: string;
-  };
+  result?: { translation?: string };
 };
 
-type QuranEncTranslationInfo = {
-  key?: string;
-  version?: string;
+type TranslationState = {
+  verseKey: string;
+  text: string;
+  version: string;
+  error: boolean;
 };
 
 export default function BestMatchCard({
@@ -37,57 +37,47 @@ export default function BestMatchCard({
   isFavorite,
   onToggleFavorite,
 }: Props) {
-  const [fetchedTranslation, setFetchedTranslation] = useState("");
-  const [translationVersion, setTranslationVersion] = useState("");
-  const [translationLoading, setTranslationLoading] = useState(false);
-  const [translationError, setTranslationError] = useState(false);
+  const [translationState, setTranslationState] = useState<TranslationState | null>(null);
+  const verseKey = surahNumber + ":" + ayah;
 
   useEffect(() => {
-    if (initialTranslation?.trim()) {
-      setFetchedTranslation("");
-      setTranslationError(false);
-      return;
-    }
+    if (initialTranslation?.trim()) return;
 
     let cancelled = false;
 
     async function loadTranslation() {
-      setTranslationLoading(true);
-      setTranslationError(false);
-
       try {
-        const [ayaResponse, metadataResponse] = await Promise.all([
-          fetch(
-            \`https://quranenc.com/api/v1/translation/aya/french_rashid/\${surahNumber}/\${ayah}\`
-          ),
-          fetch("https://quranenc.com/api/v1/translations/list/fr?localization=fr"),
-        ]);
+        const response = await fetch(
+          "https://quranenc.com/api/v1/translation/aya/french_rashid/" +
+            surahNumber +
+            "/" +
+            ayah
+        );
 
-        if (!ayaResponse.ok) {
-          throw new Error("Translation unavailable");
-        }
+        if (!response.ok) throw new Error("Translation unavailable");
 
-        const ayaData = (await ayaResponse.json()) as QuranEncAya;
-        let version = "";
+        const data = (await response.json()) as QuranEncResponse;
+        const translatedText = data.result?.translation ?? data.translation ?? "";
 
-        if (metadataResponse.ok) {
-          const metadata = await metadataResponse.json();
-          const translations: QuranEncTranslationInfo[] = Array.isArray(metadata)
-            ? metadata
-            : metadata.translations ?? [];
-          version = translations.find((item) => item.key === "french_rashid")?.version ?? "";
-        }
+        if (!translatedText) throw new Error("Empty translation");
 
         if (!cancelled) {
-          const translatedText = ayaData.result?.translation ?? ayaData.translation ?? "";
-          setFetchedTranslation(translatedText);
-          setTranslationVersion(version);
-          if (!translatedText) setTranslationError(true);
+          setTranslationState({
+            verseKey,
+            text: translatedText,
+            version: "Rachid Maach",
+            error: false,
+          });
         }
       } catch {
-        if (!cancelled) setTranslationError(true);
-      } finally {
-        if (!cancelled) setTranslationLoading(false);
+        if (!cancelled) {
+          setTranslationState({
+            verseKey,
+            text: "",
+            version: "",
+            error: true,
+          });
+        }
       }
     }
 
@@ -96,19 +86,28 @@ export default function BestMatchCard({
     return () => {
       cancelled = true;
     };
-  }, [surahNumber, ayah, initialTranslation]);
+  }, [surahNumber, ayah, verseKey, initialTranslation]);
 
+  const fetchedTranslation =
+    translationState?.verseKey === verseKey ? translationState.text : "";
   const displayedTranslation = initialTranslation?.trim() || fetchedTranslation;
+  const translationError =
+    translationState?.verseKey === verseKey && translationState.error;
 
   const copyVerse = async () => {
-    const text = \`Sourate \${surahNumber} - \${surahName}
-Verset \${ayah}
+    const text =
+      "Sourate " +
+      surahNumber +
+      " - " +
+      surahName +
+      "\nVerset " +
+      ayah +
+      "\n\n" +
+      arabic +
+      "\n\n" +
+      displayedTranslation +
+      "\n\nAyaScan Quran Finder";
 
-\${arabic}
-
-\${displayedTranslation}
-
-AyaScan Quran Finder\`;
     try {
       await navigator.clipboard.writeText(text);
       alert("Verset copié !");
@@ -155,17 +154,17 @@ AyaScan Quran Finder\`;
               <p className="text-base leading-relaxed text-emerald-50 sm:text-lg">{displayedTranslation}</p>
               {!initialTranslation && (
                 <p className="mt-3 border-t border-white/10 pt-2 text-xs text-emerald-100/70">
-                  Traduction de Rachid Maach · Source : QuranEnc.com{translationVersion ? \` · Version \${translationVersion}\` : ""}
+                  Traduction de {translationState?.verseKey === verseKey ? translationState.version : "Rachid Maach"} · Source : QuranEnc.com
                 </p>
               )}
             </>
-          ) : translationLoading ? (
-            <p className="text-sm text-emerald-100/75">Chargement de la traduction…</p>
           ) : translationError ? (
             <p className="text-sm text-emerald-100/75">
               La traduction n’est pas disponible pour le moment. Le texte arabe reste accessible.
             </p>
-          ) : null}
+          ) : (
+            <p className="text-sm text-emerald-100/75">Chargement de la traduction…</p>
+          )}
         </div>
 
         <div className="mt-6 flex flex-wrap gap-3">
