@@ -1,13 +1,13 @@
 @import "tailwindcss";
 
 :root {
-  color-scheme: dark;
-  --background: #061b17;
-  --foreground: #f8f5e9;
-  --emerald: #047857;
-  --emerald-deep: #022c22;
-  --gold: #d6ad55;
-  --gold-soft: #f2d58a;
+  color-scheme: light;
+  --background: #f7f8f5;
+  --foreground: #173d32;
+  --emerald: #0d5945;
+  --emerald-deep: #174b3b;
+  --gold: #c6a45e;
+  --gold-soft: #e8d5a4;
 }
 
 @theme inline {
@@ -40,8 +40,8 @@ body {
 }
 
 ::selection {
-  color: #061b17;
-  background: var(--gold-soft);
+  color: #ffffff;
+  background: #0d5945;
 }
 
 :focus-visible {
