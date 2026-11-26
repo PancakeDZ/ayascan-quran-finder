@@ -661,14 +661,18 @@ const saveBestResultToHistory = () => {
               <span aria-hidden="true" className="text-xl">▣</span>
               Effacer
             </button>
-            <span aria-hidden="true" className="hidden h-11 w-px bg-[#d9ad46] sm:block" />
-            <button
-              onClick={listening ? stopListening : startListening}
-              className="flex min-w-48 items-center justify-center gap-3 rounded-full border-2 border-[#07513c] bg-[#fffdf5]/75 px-6 py-3 text-base font-semibold text-[#07513c] shadow-md transition hover:bg-white"
-            >
-              <span aria-hidden="true" className="text-xl">{listening ? "■" : "▶"}</span>
-              {listening ? "Arrêter" : "Démarrer"}
-            </button>
+            {listening && (
+              <>
+                <span aria-hidden="true" className="hidden h-11 w-px bg-[#d9ad46] sm:block" />
+                <button
+                  onClick={stopListening}
+                  className="flex min-w-48 items-center justify-center gap-3 rounded-full border-2 border-[#07513c] bg-[#fffdf5]/75 px-6 py-3 text-base font-semibold text-[#07513c] shadow-md transition hover:bg-white"
+                >
+                  <span aria-hidden="true" className="text-xl">■</span>
+                  Arrêter
+                </button>
+              </>
+            )}
           </div>
         </section>
 
