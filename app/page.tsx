@@ -693,6 +693,7 @@ const saveBestResultToHistory = () => {
               surahNumber={bestMatch.verse.surahNumber}
               ayah={bestMatch.verse.ayah}
               arabic={bestMatch.verse.arabic}
+              translation={bestMatch.verse.translation}
               confidence={bestMatch.score}
               isFavorite={bestMatchIsFavorite}
               onToggleFavorite={() => toggleFavorite(bestMatch)}
