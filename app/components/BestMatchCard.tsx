@@ -16,6 +16,9 @@ type Props = {
 
 type QuranEncAya = {
   translation?: string;
+  result?: {
+    translation?: string;
+  };
 };
 
 type QuranEncTranslationInfo = {
@@ -76,9 +79,10 @@ export default function BestMatchCard({
         }
 
         if (!cancelled) {
-          setFetchedTranslation(ayaData.translation ?? "");
+          const translatedText = ayaData.result?.translation ?? ayaData.translation ?? "";
+          setFetchedTranslation(translatedText);
           setTranslationVersion(version);
-          if (!ayaData.translation) setTranslationError(true);
+          if (!translatedText) setTranslationError(true);
         }
       } catch {
         if (!cancelled) setTranslationError(true);
